@@ -1,0 +1,20 @@
+-- Grants the Web App's system-assigned managed identity runtime (read/write, not schema-altering)
+-- access to the DMARC Analyzer database. Bicep cannot create SQL database users/role memberships
+-- directly, so this runs as a pipeline step (see .github/workflows/deploy.yml) authenticated with an
+-- Azure AD access token, right after the Web App resource is created and before the first app deploy.
+--
+-- Schema migrations are applied separately by the deploy pipeline's own federated identity, which
+-- must be the SQL server's Azure AD administrator (sqlAdminAadObjectId in main.parameters.json) or a
+-- member of the AAD group set as administrator — that principal already has full rights and needs no
+-- extra grant here.
+--
+-- Placeholders (substituted by the deploy workflow):
+--   __WEBAPP_NAME__  -> the Web App's name, which is also its managed identity's display name in Azure AD
+
+IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '__WEBAPP_NAME__')
+BEGIN
+    CREATE USER [__WEBAPP_NAME__] FROM EXTERNAL PROVIDER;
+END
+
+ALTER ROLE db_datareader ADD MEMBER [__WEBAPP_NAME__];
+ALTER ROLE db_datawriter ADD MEMBER [__WEBAPP_NAME__];
