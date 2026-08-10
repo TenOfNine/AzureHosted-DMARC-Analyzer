@@ -290,7 +290,7 @@ public class DmarcReportIngestionPipeline(
         reputation.LastSeenUtc = DateTime.UtcNow;
         reputation.TotalVolume += record.Count;
 
-        var isAlignedPass = record.PolicyEvaluatedDkim == DmarcPolicyResult.Pass || record.PolicyEvaluatedSpf == DmarcPolicyResult.Pass;
+        var isAlignedPass = DmarcAlignment.IsAlignedPass(record.PolicyEvaluatedDkim, record.PolicyEvaluatedSpf);
         if (isAlignedPass)
         {
             reputation.AlignedPassVolume += record.Count;

@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 1.3 |
+| **Document version** | 1.4 |
 | **Date written** | 2026-08-10 (last updated 2026-08-10 — see [§7.4 Change log](#74-change-log)) |
 | **Document status** | Final — describes the as-built system on `main` plus this update's pending pull request |
 | **Repository** | `TenOfNine/AzureHosted-DMARC-Analyzer` |
@@ -52,9 +52,11 @@ automatically, (b) independently re-verifies each report's claims against the se
 | **Deploying engineer** | Stands up a new instance of the system for an organization: provisions Azure infrastructure, registers the Entra ID app, runs the setup wizard. |
 | **Maintainer/contributor** | Extends the codebase — this document, together with the source tree, is the primary onboarding reference. |
 
-There is currently one implicit role: anyone who can reach the deployed Web App URL has full
-access to the dashboard and settings (see [§5.2](#52-security-requirements) for the security
-posture this implies).
+There is currently one implicit role: any user who signs in via the tenant's Entra ID (gated by
+Azure App Service Authentication in front of the whole app — see [§5.2](#52-security-requirements))
+has full access to the dashboard and settings. There is no in-app role separation between the
+messaging/security administrator persona and the deploying engineer — anyone able to sign in can
+also reconfigure the Graph connection, domains, and mailboxes.
 
 ## 3. Functional Requirements
 
@@ -364,8 +366,11 @@ resource group for a new organization without name collisions (supports G-5/FR-C
 | NFR-SEC-2 | The Graph app registration's client secret is written directly to Key Vault by the setup wizard and is never persisted in SQL, logs, or source control. |
 | NFR-SEC-3 | GitHub Actions authenticates to Azure via OIDC federated credentials; no long-lived Azure secret is stored as a GitHub secret. |
 | NFR-SEC-4 | The Graph application permission (`Mail.Read`) is tenant-wide by default; the system documents (does not itself automate) scoping it to only the configured shared mailboxes via an Exchange Online Application Access Policy — see `docs/exchange-application-access-policy.md`. |
-| NFR-SEC-5 | **Gap, accepted for the current scope**: the Web App itself has no authentication/authorization layer — anyone who can reach the deployed URL has full read/write access to the dashboard and all settings, including the ability to rotate the Graph client secret and add/remove monitored domains and mailboxes. This is an explicit, documented limitation, not an oversight; deployments are expected to restrict network reachability (e.g., Azure Front Door with auth, VNet integration + private endpoint, or an App Service authentication provider) at the infrastructure layer if broader-than-trusted-network exposure is required. This is the single most consequential gap between "internal tool for a trusted network" and "safe to expose publicly," and should be the first extension considered before any deployment reachable from the open internet. |
+| NFR-SEC-5 | The Web App is gated behind Microsoft Entra ID sign-in via Azure App Service Authentication ("Easy Auth" v2, `infra/modules/webApp.bicep`'s `authsettingsV2` resource) — enforced at the platform level, in front of every request including the setup wizard, so no application code implements or can accidentally bypass login. `enableEntraIdAuth` defaults to `true`; disabling it is only appropriate when the app sits behind some other equivalent access control (private network, gateway auth) and must be a deliberate, documented choice per deployment. This closes what was previously an accepted gap (see §7.4 v1.4 change log) — the single most consequential hardening step for any deployment reachable outside a fully trusted network. |
 | NFR-SEC-6 | Raw report/email content is not stored (see [§3.7](#37-explicitly-out-of-scope)), limiting the blast radius of a database compromise to metadata (source IPs, volumes, org names) rather than message content. |
+| NFR-SEC-7 | Every response carries a restrictive Content-Security-Policy (`default-src 'self'`, nonce-based `script-src`, no framing, no external origins — nothing is loaded from a CDN, everything under `wwwroot/lib` is vendored), plus `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and a locked-down `Permissions-Policy` (`SecurityHeadersMiddleware`). The Kestrel `Server` header is suppressed. |
+| NFR-SEC-8 | The DMARC report XML parser explicitly blocks DOCTYPE processing (`XmlReaderSettings.DtdProcessing = Prohibit`, `XmlResolver = null`) before parsing — reporting organizations are arbitrary third parties on the internet, so this is untrusted input; the setting blocks both XXE (external entity resolution) and "billion laughs" (internal entity expansion) rather than relying on the implicit (already-safe) `XmlReader` defaults. |
+| NFR-SEC-9 | Zip/gzip attachment extraction is bounded to 50 MB of actual decompressed bytes (`AttachmentExtractor.CopyWithLimit`), enforced by counting bytes copied rather than trusting the archive's declared (attacker-controlled) size — the shared mailbox accepts attachments from arbitrary senders, so a small, highly-compressible payload could otherwise decompress into a memory-exhaustion DoS. |
 
 ### 5.3 Usability requirements
 
@@ -396,7 +401,7 @@ resource group for a new organization without name collisions (supports G-5/FR-C
 This section records what has actually been verified against the implementation, as evidence for
 the acceptance criteria in [§6.1](#61-acceptance-criteria).
 
-- **Automated test suite**: 62 xUnit tests, all passing (`dotnet test`), covering:
+- **Automated test suite**: 65 xUnit tests, all passing (`dotnet test`), covering:
   - `SpfEvaluatorTests` (18 tests): CIDR boundary correctness (ip4/ip6), all four `all`-qualifier
     outcomes, two-level nested `include` with correct non-short-circuit fallthrough, an `include`
     target with no record, the `redirect` modifier, `a`/`mx` with and without explicit
@@ -405,9 +410,10 @@ the acceptance criteria in [§6.1](#61-acceptance-criteria).
     case-insensitivity.
   - `DkimSelectorCheckerTests` (5 tests): valid key, revoked (empty `p=`), missing record, no
     `p=` tag, garbage base64.
-  - `DmarcXmlParserTests` (5 tests) and `AttachmentExtractorTests` (4 tests): full/minimal valid
-    reports, malformed XML, a missing required field, a non-`<feedback>` root, and zip/gzip/raw-xml
-    attachment-extraction equivalence.
+  - `DmarcXmlParserTests` (6 tests) and `AttachmentExtractorTests` (6 tests): full/minimal valid
+    reports, malformed XML, a missing required field, a non-`<feedback>` root, a DOCTYPE declaration
+    (XXE/entity-expansion) rejection, zip/gzip/raw-xml attachment-extraction equivalence, and the
+    decompression-bomb size-limit guard for both zip and gzip.
   - `MailboxPollingServiceTests` (2 tests): a message is not reprocessed on a second poll; one
     malformed message does not block a subsequent valid one in the same batch.
   - `SenderLegitimacyEvaluatorTests` (15 tests): the override-match short-circuit, the Verified
@@ -422,14 +428,18 @@ the acceptance criteria in [§6.1](#61-acceptance-criteria).
     to LikelyLegitimate once a forward-confirmed PTR is introduced; an admin override forces
     Verified regardless of SPF result.
 - **Infrastructure validation**: `infra/main.bicep` compiles and lints cleanly with the Bicep CLI
-  (0 errors, 0 warnings) — all 5 modules and the Key Vault role assignment resolve correctly.
+  (v0.46.1; 0 errors, 0 warnings) — all 5 modules, the new `authsettingsV2` Easy Auth resource, and
+  the Key Vault role assignment resolve correctly.
 - **End-to-end UI verification**: the running application (seeded with representative sample data,
   not a live Azure/Graph tenant) was exercised via a headless-browser pass covering the dashboard,
   domain-detail page (sender-legitimacy table, per-record legitimacy badges, discrepancy/stale
   badges, and — interactively — clicking a column header to confirm client-side sorting and
   applying the legitimacy filter to confirm both tables narrow correctly), settings hub,
   domains/mailboxes configuration, ingestion status, and setup wizard — see the screenshots in
-  `README.md`.
+  `README.md`. Re-verified after the security-hardening pass: response headers (CSP with a
+  per-request nonce, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`) are present on every route, and the domain-detail trend chart (the app's one
+  inline `<script>` block) still renders with zero browser console/CSP errors under the new policy.
 - **Workflow syntax**: both GitHub Actions workflow files were parsed and validated as well-formed
   YAML.
 

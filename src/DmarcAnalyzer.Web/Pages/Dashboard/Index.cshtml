@@ -27,7 +27,10 @@ else
                             <div class="fw-semibold">@domain.DomainName</div>
                             @if (domain.PassRatePercent is { } rate)
                             {
-                                var badgeClass = rate >= 95 ? "badge-verified" : "badge-unverified";
+                                @* Same "verified" bar as the sender-legitimacy scorer (Core.Legitimacy.SenderLegitimacyEvaluator),
+                                   so this badge can't silently drift out of sync with that documented business rule. *@
+                                var badgeClass = rate >= DmarcAnalyzer.Core.Legitimacy.SenderLegitimacyEvaluator.VerifiedAlignedPassRatioThreshold * 100
+                                    ? "badge-verified" : "badge-unverified";
                                 <span class="badge @badgeClass">@rate.ToString("0.#")% aligned</span>
                             }
                         </div>

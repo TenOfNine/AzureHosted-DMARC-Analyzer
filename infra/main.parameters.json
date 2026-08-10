@@ -22,6 +22,12 @@
     },
     "sqlAdminPrincipalType": {
       "value": "User"
+    },
+    "enableEntraIdAuth": {
+      "value": true
+    },
+    "authAadClientId": {
+      "value": "CHANGEME-sign-in-app-client-id"
     }
   }
 }

@@ -4,7 +4,7 @@
 ![CodeQL](https://github.com/TenOfNine/AzureHosted-DMARC-Analyzer/actions/workflows/codeql.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
 ![.NET](https://img.shields.io/badge/.NET-8-512BD4)
-![Tests](https://img.shields.io/badge/tests-62%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-65%20passing-brightgreen)
 
 A self-hosted DMARC report analyzer, deployed as an Azure App Service. It ingests RUA/RUF reports
 from Exchange Online shared mailboxes via Microsoft Graph, and goes beyond just showing what a
@@ -21,7 +21,7 @@ baked into the deployment template.
 ```
 src/
   DmarcAnalyzer.Core            Pure domain logic: RFC 7489 XML parsing, RFC 7208 SPF evaluation,
-                                 DKIM selector checking, verified-sender classification.
+                                 DKIM selector checking, sender-legitimacy scoring.
                                  No Azure/EF/Graph dependency — fully unit-testable offline.
   DmarcAnalyzer.Infrastructure  EF Core (Azure SQL), Microsoft Graph client, Key Vault secret
                                  store, DNS resolution, background ingestion + retention jobs.
@@ -131,15 +131,36 @@ against Graph before anything is saved, then the secret is written straight to K
 domains and mailboxes, and setting the retention window. A fresh deployment redirects here
 automatically until all of it is complete.
 
+## Security
+
+- **Sign-in required**: Azure App Service Authentication ("Easy Auth") gates every request behind
+  Microsoft Entra ID sign-in at the platform level, in front of the setup wizard and dashboard
+  alike — enabled by default (`enableEntraIdAuth` in `infra/main.bicep`); see
+  [`docs/deployment.md`](docs/deployment.md#3-set-up-sign-in-authentication-easy-auth) for setup.
+- **Hardened response headers**: a restrictive Content-Security-Policy (nonce-based `script-src`,
+  no external origins — everything under `wwwroot/lib` is vendored, nothing loads from a CDN),
+  `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and `Permissions-Policy` on every
+  response (`SecurityHeadersMiddleware`).
+- **Untrusted-input hardening**: the DMARC report XML parser explicitly blocks DOCTYPE processing
+  (XXE / entity-expansion), and zip/gzip attachment extraction is capped at 50 MB of actual
+  decompressed bytes — the shared mailbox accepts attachments from arbitrary internet senders, so
+  both are real, not theoretical, attack surface.
+- **No password-based credentials anywhere**: Graph access is app-only OAuth, SQL access is Azure
+  AD-only (managed identity), Key Vault access is managed identity via RBAC, and GitHub Actions
+  authenticates to Azure via OIDC federated credentials — see NFR-SEC-1–9 in
+  [`docs/technical-specification.md`](docs/technical-specification.md#5-non-functional-requirements)
+  for the full list.
+
 ## Testing
 
 ```
-Passed!  - Failed: 0, Passed: 62, Skipped: 0, Total: 62
+Passed!  - Failed: 0, Passed: 65, Skipped: 0, Total: 65
 ```
 
-62 xUnit tests cover the RFC 7489 XML parser, the RFC 7208 SPF evaluator (CIDR boundaries,
-recursive `include`, `redirect`, the 10-lookup limit, all qualifiers), the DKIM selector checker,
-the sender-legitimacy scoring rules, and the ingestion pipeline (dedupe, per-message failure
+65 xUnit tests cover the RFC 7489 XML parser (including DOCTYPE/XXE rejection), the RFC 7208 SPF
+evaluator (CIDR boundaries, recursive `include`, `redirect`, the 10-lookup limit, all qualifiers),
+the DKIM selector checker, the sender-legitimacy scoring rules, attachment extraction (including
+the decompression-bomb size guard), and the ingestion pipeline (dedupe, per-message failure
 isolation, sender-reputation aggregation) — all against hand-written fakes for Graph/DNS, so the
 suite needs no network access and runs the same locally as in CI.
 

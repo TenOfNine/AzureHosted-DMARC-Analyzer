@@ -88,5 +88,15 @@ public class DmarcXmlParserTests
         Assert.Throws<DmarcParseException>(() => DmarcXmlParser.Parse(ToStream(xml)));
     }
 
+    // Reporting organizations are untrusted third parties — a DOCTYPE is the vector for both XXE
+    // (external entity resolution) and "billion laughs" (internal entity expansion) attacks. The
+    // parser must reject it outright rather than attempt to resolve or expand it.
+    [Fact]
+    public void Parse_DoctypeDeclaration_ThrowsDmarcParseException()
+    {
+        const string xml = "<?xml version=\"1.0\"?><!DOCTYPE feedback [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><feedback><record>&xxe;</record></feedback>";
+        Assert.Throws<DmarcParseException>(() => DmarcXmlParser.Parse(ToStream(xml)));
+    }
+
     private static MemoryStream ToStream(string xml) => new(Encoding.UTF8.GetBytes(xml));
 }

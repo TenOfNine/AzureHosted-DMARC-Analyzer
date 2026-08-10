@@ -23,7 +23,7 @@ public class IndexModel(DmarcAnalyzerDbContext db) : PageModel
 
             var totalVolume = records.Sum(r => r.Count);
             var passVolume = records
-                .Where(r => r.PolicyEvaluatedDkim == DmarcPolicyResult.Pass || r.PolicyEvaluatedSpf == DmarcPolicyResult.Pass)
+                .Where(r => DmarcAlignment.IsAlignedPass(r.PolicyEvaluatedDkim, r.PolicyEvaluatedSpf))
                 .Sum(r => r.Count);
             var passRate = totalVolume > 0 ? Math.Round((double)passVolume / totalVolume * 100, 1) : (double?)null;
 

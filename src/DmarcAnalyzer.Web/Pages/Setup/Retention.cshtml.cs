@@ -29,16 +29,11 @@ public class RetentionModel(DmarcAnalyzerDbContext db) : PageModel
             return Page();
         }
 
-        var settings = await db.RetentionSettings.FindAsync(RetentionSettingsEntity.SingletonId);
-        var isNew = settings is null;
-        settings ??= new RetentionSettingsEntity { Id = RetentionSettingsEntity.SingletonId };
+        var settings = await db.GetOrCreateSingletonAsync(
+            RetentionSettingsEntity.SingletonId,
+            id => new RetentionSettingsEntity { Id = id });
 
         settings.RetentionDays = RetentionDays;
-
-        if (isNew)
-        {
-            db.RetentionSettings.Add(settings);
-        }
 
         await db.SaveChangesAsync();
 

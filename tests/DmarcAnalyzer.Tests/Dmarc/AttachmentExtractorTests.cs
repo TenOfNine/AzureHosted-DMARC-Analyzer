@@ -56,6 +56,25 @@ public class AttachmentExtractorTests
         Assert.Null(extracted);
     }
 
+    // The shared mailbox receives attachments from arbitrary senders on the internet. A small,
+    // highly-compressible payload (repeated bytes) that decompresses past the extractor's limit must
+    // be rejected rather than exhausted into memory — this is the decompression-bomb guard.
+    [Fact]
+    public void TryExtractXml_ZipEntryExceedsDecompressionLimit_ThrowsDmarcParseException()
+    {
+        var zipBytes = ZipXml("report.xml", new string('A', 51 * 1024 * 1024));
+
+        Assert.Throws<DmarcParseException>(() => AttachmentExtractor.TryExtractXml("report.xml.zip", zipBytes));
+    }
+
+    [Fact]
+    public void TryExtractXml_GzipExceedsDecompressionLimit_ThrowsDmarcParseException()
+    {
+        var gzipBytes = GzipXml(new string('A', 51 * 1024 * 1024));
+
+        Assert.Throws<DmarcParseException>(() => AttachmentExtractor.TryExtractXml("report.xml.gz", gzipBytes));
+    }
+
     private static byte[] ZipXml(string entryName, string xml)
     {
         using var memoryStream = new MemoryStream();

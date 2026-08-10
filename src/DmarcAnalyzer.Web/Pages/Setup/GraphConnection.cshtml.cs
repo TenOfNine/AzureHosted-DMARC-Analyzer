@@ -75,9 +75,9 @@ public class GraphConnectionModel(DmarcAnalyzerDbContext db, ISecretStore secret
 
         await secretStore.SetSecretAsync(ClientSecretName, ClientSecret);
 
-        var settings = await db.GraphConnectionSettings.FindAsync(GraphConnectionSettingsEntity.SingletonId);
-        var isNew = settings is null;
-        settings ??= new GraphConnectionSettingsEntity { Id = GraphConnectionSettingsEntity.SingletonId };
+        var settings = await db.GetOrCreateSingletonAsync(
+            GraphConnectionSettingsEntity.SingletonId,
+            id => new GraphConnectionSettingsEntity { Id = id });
 
         settings.TenantId = tenantGuid;
         settings.ClientId = clientGuid;
@@ -86,11 +86,6 @@ public class GraphConnectionModel(DmarcAnalyzerDbContext db, ISecretStore secret
         settings.LastValidatedUtc = DateTime.UtcNow;
         settings.LastValidationSucceeded = true;
         settings.LastValidationError = null;
-
-        if (isNew)
-        {
-            db.GraphConnectionSettings.Add(settings);
-        }
 
         await db.SaveChangesAsync();
 
