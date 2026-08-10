@@ -23,6 +23,19 @@ param sqlAdminAadLogin string
 @allowed(['User', 'Group', 'Application'])
 param sqlAdminPrincipalType string = 'User'
 
+@description('Gate every request behind Microsoft Entra ID sign-in. See webApp.bicep and docs/deployment.md — strongly recommended true for any deployment reachable outside a fully trusted private network.')
+param enableEntraIdAuth bool = true
+
+@description('Client ID of the App Registration used for interactive sign-in (Easy Auth). Required when enableEntraIdAuth is true.')
+param authAadClientId string = ''
+
+@description('Tenant ID that owns the sign-in App Registration. Defaults to the deploying subscription\'s tenant.')
+param authAadTenantId string = subscription().tenantId
+
+@secure()
+@description('Client secret for the sign-in App Registration. Pass at deploy time only (e.g. a GitHub Actions secret) — never commit this to main.parameters.json. Required when enableEntraIdAuth is true.')
+param authAadClientSecret string = ''
+
 var uniqueSuffix = uniqueString(resourceGroup().id, namePrefix, environmentName)
 var keyVaultName = take('${namePrefix}kv${uniqueSuffix}', 24)
 var sqlServerName = take('${toLower(namePrefix)}-sql-${uniqueSuffix}', 63)
@@ -77,6 +90,10 @@ module webApp 'modules/webApp.bicep' = {
     keyVaultUri: keyVault.outputs.keyVaultUri
     sqlServerFqdn: sqlServer.outputs.sqlServerFqdn
     sqlDatabaseName: sqlServer.outputs.sqlDatabaseName
+    enableEntraIdAuth: enableEntraIdAuth
+    authAadClientId: authAadClientId
+    authAadTenantId: authAadTenantId
+    authAadClientSecret: authAadClientSecret
   }
 }
 

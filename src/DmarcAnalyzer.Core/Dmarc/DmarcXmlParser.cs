@@ -13,10 +13,22 @@ public static class DmarcXmlParser
 {
     public static ParsedDmarcReport Parse(Stream xmlStream)
     {
+        // Reporting organizations are arbitrary third parties on the internet — this XML is untrusted
+        // input. DtdProcessing.Prohibit + a null XmlResolver explicitly blocks DOCTYPE/external-entity
+        // resolution (XXE) and internal-entity expansion ("billion laughs") rather than relying on the
+        // (already-safe-by-default) implicit XmlReader defaults, so the intent survives a framework
+        // change or a copy-paste into code that isn't on this default.
+        var readerSettings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+        };
+
         XDocument doc;
         try
         {
-            doc = XDocument.Load(xmlStream, LoadOptions.None);
+            using var reader = XmlReader.Create(xmlStream, readerSettings);
+            doc = XDocument.Load(reader, LoadOptions.None);
         }
         catch (Exception ex) when (ex is XmlException or InvalidOperationException)
         {

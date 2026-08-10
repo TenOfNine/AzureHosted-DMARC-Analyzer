@@ -180,7 +180,7 @@
 @section Scripts {
     <script src="~/lib/chartjs/chart.umd.js"></script>
     <script src="~/js/sortable-table.js" asp-append-version="true"></script>
-    <script>
+    <script nonce="@Model.HttpContext.CspNonce()">
         (function () {
             const domainId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DomainId));
             const days = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Days));

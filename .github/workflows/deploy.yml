@@ -39,6 +39,9 @@ jobs:
       # Node 20 runtime — GitHub's runner silently forces it onto Node 24 with a warning in the logs
       # (harmless, not our bug). Microsoft is deprecating this action in favor of azure/bicep-deploy;
       # migrating is a separate, larger change since that action has a different input/output surface.
+      # authAadClientSecret is deliberately not in main.parameters.json (which is committed to the
+      # repo) — it's injected here, at deploy time only, from a GitHub Actions secret. See "Set up
+      # sign-in authentication" in docs/deployment.md.
       - name: Deploy infrastructure (Bicep)
         id: deploy
         uses: azure/arm-deploy@v2
@@ -46,7 +49,7 @@ jobs:
           scope: resourcegroup
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
           template: infra/main.bicep
-          parameters: infra/main.parameters.json
+          parameters: infra/main.parameters.json authAadClientSecret=${{ secrets.AZURE_AUTH_CLIENT_SECRET }}
           deploymentName: dmarc-analyzer-${{ github.run_number }}
 
   migrate-and-deploy:

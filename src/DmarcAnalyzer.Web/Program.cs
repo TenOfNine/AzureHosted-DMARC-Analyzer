@@ -16,6 +16,9 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Suppress Kestrel's "Server" response header — no reason to advertise the runtime to an attacker.
+builder.WebHost.ConfigureKestrel(o => o.AddServerHeader = false);
+
 builder.Services.AddRazorPages();
 
 var connectionString = builder.Configuration.GetConnectionString("DmarcAnalyzer")
@@ -57,6 +60,11 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Registered before UseStaticFiles so hardening headers (CSP, X-Frame-Options, etc.) also cover
+// static assets, not just Razor Pages responses.
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
 app.UseStaticFiles();
 
 app.UseRouting();

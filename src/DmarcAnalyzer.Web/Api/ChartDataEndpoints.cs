@@ -13,13 +13,17 @@ public static class ChartDataEndpoints
             var windowDays = Math.Clamp(days is null or <= 0 ? 30 : days.Value, 1, 365);
             var cutoff = DateTime.UtcNow.Date.AddDays(-windowDays);
 
+            // Project the raw enum columns (translatable to SQL) rather than the derived "aligned pass"
+            // boolean, so the alignment rule itself is computed once client-side via DmarcAlignment,
+            // the same helper the ingestion pipeline and dashboard summary use.
             var raw = await db.Records
                 .Where(r => r.AggregateReport.DomainId == domainId && r.AggregateReport.DateRangeEndUtc >= cutoff)
                 .Select(r => new
                 {
                     Date = r.AggregateReport.DateRangeEndUtc.Date,
                     r.Count,
-                    Passed = r.PolicyEvaluatedDkim == DmarcPolicyResult.Pass || r.PolicyEvaluatedSpf == DmarcPolicyResult.Pass
+                    r.PolicyEvaluatedDkim,
+                    r.PolicyEvaluatedSpf
                 })
                 .ToListAsync();
 
@@ -28,8 +32,8 @@ public static class ChartDataEndpoints
                 .Select(g => new
                 {
                     date = g.Key.ToString("yyyy-MM-dd"),
-                    pass = g.Where(x => x.Passed).Sum(x => x.Count),
-                    fail = g.Where(x => !x.Passed).Sum(x => x.Count)
+                    pass = g.Where(x => DmarcAlignment.IsAlignedPass(x.PolicyEvaluatedDkim, x.PolicyEvaluatedSpf)).Sum(x => x.Count),
+                    fail = g.Where(x => !DmarcAlignment.IsAlignedPass(x.PolicyEvaluatedDkim, x.PolicyEvaluatedSpf)).Sum(x => x.Count)
                 })
                 .OrderBy(x => x.date)
                 .ToList();
