@@ -1,20 +1,18 @@
 using System.Net;
-using DmarcAnalyzer.Core.Abstractions;
 using DmarcAnalyzer.Core.Entities;
 
 namespace DmarcAnalyzer.Core.Verification;
 
-public class VerifiedSenderClassifier : IVerifiedSenderClassifier
+/// <summary>
+/// Whether a record's source IP or reporting org matches an admin-curated
+/// <see cref="VerifiedSenderOverride"/> allowlist entry — a standalone input signal feeding
+/// <see cref="Legitimacy.SenderLegitimacyEvaluator"/>, independent of the record's own DMARC-aligned
+/// pass/fail.
+/// </summary>
+public static class SenderOverrideMatcher
 {
-    public bool IsVerifiedSender(DmarcRecord record, IReadOnlyList<VerifiedSenderOverride> overrides)
+    public static bool Matches(DmarcRecord record, IReadOnlyList<VerifiedSenderOverride> overrides)
     {
-        // A DMARC-aligned pass (either mechanism) is enough — this mirrors what the receiving mail
-        // server itself decided, per the DMARC policy_evaluated block.
-        if (record.PolicyEvaluatedDkim == DmarcPolicyResult.Pass || record.PolicyEvaluatedSpf == DmarcPolicyResult.Pass)
-        {
-            return true;
-        }
-
         var sourceIpParsed = IPAddress.TryParse(record.SourceIp, out var sourceIp);
         var orgName = record.AggregateReport?.OrgName;
 

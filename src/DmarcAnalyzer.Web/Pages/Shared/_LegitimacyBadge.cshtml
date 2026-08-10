@@ -1,0 +1,11 @@
+@model DmarcAnalyzer.Core.Entities.SenderLegitimacyLevel
+@{
+    var (cssClass, label) = Model switch
+    {
+        DmarcAnalyzer.Core.Entities.SenderLegitimacyLevel.Verified => ("badge-verified", "Verified"),
+        DmarcAnalyzer.Core.Entities.SenderLegitimacyLevel.LikelyLegitimate => ("badge-likely", "Likely legitimate"),
+        DmarcAnalyzer.Core.Entities.SenderLegitimacyLevel.Suspicious => ("badge-suspicious", "Suspicious"),
+        _ => ("badge-unverified", "Unverified")
+    };
+}
+<span class="badge @cssClass">@label</span>

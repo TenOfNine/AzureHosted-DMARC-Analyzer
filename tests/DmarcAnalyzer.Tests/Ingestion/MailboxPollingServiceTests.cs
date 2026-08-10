@@ -3,6 +3,7 @@ using System.Text;
 using DmarcAnalyzer.Core.Abstractions;
 using DmarcAnalyzer.Core.Dkim;
 using DmarcAnalyzer.Core.Entities;
+using DmarcAnalyzer.Core.Legitimacy;
 using DmarcAnalyzer.Core.Spf;
 using DmarcAnalyzer.Infrastructure.Data;
 using DmarcAnalyzer.Infrastructure.Ingestion;
@@ -96,6 +97,7 @@ public class MailboxPollingServiceTests
         services.AddSingleton<IGraphMailboxClient>(graphClient);
         services.AddScoped<ISpfDnsResolver>(_ => new FakeSpfDnsResolver());
         services.AddScoped<IDkimDnsResolver>(_ => new FakeDkimDnsResolver());
+        services.AddScoped<IReverseDnsResolver>(_ => new FakeReverseDnsResolver());
         services.AddScoped<SpfEvaluator>();
         services.AddScoped<DkimSelectorChecker>();
         services.AddScoped<IDmarcReportIngestionPipeline, DmarcReportIngestionPipeline>();

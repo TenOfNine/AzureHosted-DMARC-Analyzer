@@ -1,4 +1,3 @@
-using DmarcAnalyzer.Core.Abstractions;
 using DmarcAnalyzer.Core.Entities;
 using DmarcAnalyzer.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DmarcAnalyzer.Web.Pages.Dashboard;
 
-public class DomainDetailModel(DmarcAnalyzerDbContext db, IVerifiedSenderClassifier verifiedSenderClassifier) : PageModel
+public class DomainDetailModel(DmarcAnalyzerDbContext db) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public Guid DomainId { get; set; }
@@ -16,10 +15,23 @@ public class DomainDetailModel(DmarcAnalyzerDbContext db, IVerifiedSenderClassif
     public int Days { get; set; } = 30;
 
     [BindProperty(SupportsGet = true)]
-    public bool UnverifiedOnly { get; set; }
+    public SenderLegitimacyLevel? LegitimacyFilter { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public DmarcPolicyResult? SpfFilter { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public DmarcPolicyResult? DkimFilter { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public DmarcDisposition? DispositionFilter { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? Search { get; set; }
 
     public Domain? Domain { get; set; }
     public List<RecordRow> Records { get; set; } = [];
+    public List<SenderReputation> Senders { get; set; } = [];
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -31,6 +43,18 @@ public class DomainDetailModel(DmarcAnalyzerDbContext db, IVerifiedSenderClassif
 
         var windowDays = Math.Clamp(Days, 1, 365);
         var cutoff = DateTime.UtcNow.AddDays(-windowDays);
+        var searchLower = string.IsNullOrWhiteSpace(Search) ? null : Search.Trim().ToLowerInvariant();
+
+        var reputations = await db.SenderReputations
+            .Where(r => r.DomainId == DomainId)
+            .ToListAsync();
+        var reputationByIp = reputations.ToDictionary(r => r.SourceIp);
+
+        Senders = reputations
+            .Where(r => LegitimacyFilter is null || r.LegitimacyLevel == LegitimacyFilter)
+            .Where(r => searchLower is null || r.SourceIp.Contains(searchLower) || (r.ReverseDnsHostname?.ToLowerInvariant().Contains(searchLower) ?? false))
+            .OrderByDescending(r => r.TotalVolume)
+            .ToList();
 
         var records = await db.Records
             .Include(r => r.AggregateReport)
@@ -41,12 +65,35 @@ public class DomainDetailModel(DmarcAnalyzerDbContext db, IVerifiedSenderClassif
             .Take(500)
             .ToListAsync();
 
-        var overrides = await db.VerifiedSenderOverrides.Where(v => v.DomainId == DomainId).ToListAsync();
-
         foreach (var record in records)
         {
-            var verified = verifiedSenderClassifier.IsVerifiedSender(record, overrides);
-            if (UnverifiedOnly && verified)
+            if (SpfFilter is not null && record.PolicyEvaluatedSpf != SpfFilter)
+            {
+                continue;
+            }
+
+            if (DkimFilter is not null && record.PolicyEvaluatedDkim != DkimFilter)
+            {
+                continue;
+            }
+
+            if (DispositionFilter is not null && record.PolicyEvaluatedDisposition != DispositionFilter)
+            {
+                continue;
+            }
+
+            if (searchLower is not null
+                && !record.SourceIp.Contains(searchLower)
+                && !record.AggregateReport.OrgName.ToLowerInvariant().Contains(searchLower))
+            {
+                continue;
+            }
+
+            var legitimacy = reputationByIp.TryGetValue(record.SourceIp, out var reputation)
+                ? reputation.LegitimacyLevel
+                : SenderLegitimacyLevel.Unverified;
+
+            if (LegitimacyFilter is not null && legitimacy != LegitimacyFilter)
             {
                 continue;
             }
@@ -59,7 +106,7 @@ public class DomainDetailModel(DmarcAnalyzerDbContext db, IVerifiedSenderClassif
                 record.PolicyEvaluatedSpf,
                 record.PolicyEvaluatedDkim,
                 record.PolicyEvaluatedDisposition,
-                verified,
+                legitimacy,
                 record.SpfEvaluation?.DiscrepancyFlag ?? false,
                 record.DkimAuthResults.Any(d => d.SelectorCheck is { StaleFlag: true })));
         }
@@ -75,7 +122,7 @@ public class DomainDetailModel(DmarcAnalyzerDbContext db, IVerifiedSenderClassif
         DmarcPolicyResult SpfResult,
         DmarcPolicyResult DkimResult,
         DmarcDisposition Disposition,
-        bool Verified,
+        SenderLegitimacyLevel Legitimacy,
         bool SpfDiscrepancy,
         bool DkimStale);
 }

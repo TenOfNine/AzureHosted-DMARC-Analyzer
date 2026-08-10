@@ -113,3 +113,41 @@ body {
   background-color: #fee2e2;
   color: #991b1b;
 }
+
+.badge-likely {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-suspicious {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+/* Sortable table headers */
+table.sortable-table th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+table.sortable-table th[data-sort]:hover {
+  color: var(--brand-primary);
+}
+
+table.sortable-table th[data-sort]::after {
+  content: "\2195";
+  color: var(--brand-text-muted);
+  font-size: 0.75em;
+  margin-left: 0.35em;
+}
+
+table.sortable-table th[data-sort].sorted-asc::after {
+  content: "\2191";
+  color: var(--brand-primary);
+}
+
+table.sortable-table th[data-sort].sorted-desc::after {
+  content: "\2193";
+  color: var(--brand-primary);
+}
