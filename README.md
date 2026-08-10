@@ -1,5 +1,11 @@
 # DMARC Analyzer
 
+![CI](https://github.com/TenOfNine/AzureHosted-DMARC-Analyzer/actions/workflows/ci.yml/badge.svg)
+![CodeQL](https://github.com/TenOfNine/AzureHosted-DMARC-Analyzer/actions/workflows/codeql.yml/badge.svg)
+![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
+![.NET](https://img.shields.io/badge/.NET-8-512BD4)
+![Tests](https://img.shields.io/badge/tests-62%20passing-brightgreen)
+
 A self-hosted DMARC report analyzer, deployed as an Azure App Service. It ingests RUA/RUF reports
 from Exchange Online shared mailboxes via Microsoft Graph, and goes beyond just showing what a
 report claims: it independently re-checks each sending domain's **current** SPF record and DKIM
@@ -125,6 +131,27 @@ against Graph before anything is saved, then the secret is written straight to K
 domains and mailboxes, and setting the retention window. A fresh deployment redirects here
 automatically until all of it is complete.
 
+## Testing
+
+```
+Passed!  - Failed: 0, Passed: 62, Skipped: 0, Total: 62
+```
+
+62 xUnit tests cover the RFC 7489 XML parser, the RFC 7208 SPF evaluator (CIDR boundaries,
+recursive `include`, `redirect`, the 10-lookup limit, all qualifiers), the DKIM selector checker,
+the sender-legitimacy scoring rules, and the ingestion pipeline (dedupe, per-message failure
+isolation, sender-reputation aggregation) — all against hand-written fakes for Graph/DNS, so the
+suite needs no network access and runs the same locally as in CI.
+
+Every pull request and push to `main` runs three workflows, all required to be green before
+merging:
+
+| Workflow | What it checks |
+| --- | --- |
+| [`ci.yml`](.github/workflows/ci.yml) | `dotnet build`, `dotnet format --verify-no-changes` (lint), `dotnet test` with code coverage collection |
+| [`codeql.yml`](.github/workflows/codeql.yml) | [CodeQL](https://codeql.github.com/) static analysis for C#, plus a weekly scheduled scan |
+| [`dependency-review.yml`](.github/workflows/dependency-review.yml) | Flags newly introduced dependencies with known vulnerabilities or high-severity advisories |
+
 ## Development
 
 ```bash
@@ -134,3 +161,11 @@ dotnet test
 
 Running the app locally requires a reachable SQL Server and a real Azure Key Vault your local
 identity has access to — see [`docs/deployment.md`](docs/deployment.md#local-development).
+
+## License
+
+Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE) — free to use, modify, and
+self-host for any noncommercial purpose; commercial use (including resale or offering it as a
+paid/commercial service) requires a separate agreement with the copyright holder. Vendored
+front-end assets under `src/DmarcAnalyzer.Web/wwwroot/lib/` (Bootstrap, jQuery, Chart.js) keep
+their own original MIT licenses.
