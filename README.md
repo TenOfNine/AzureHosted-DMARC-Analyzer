@@ -29,9 +29,11 @@ infra/                          Bicep: App Service, Azure SQL (AAD-only auth), K
 docs/                           Deployment guide and the one manual Exchange Online step.
 ```
 
-See [`docs/deployment.md`](docs/deployment.md) for how to stand up a new instance, and
-[`docs/exchange-application-access-policy.md`](docs/exchange-application-access-policy.md) for
-scoping the Graph app registration to only the mailboxes it should read.
+See [`docs/technical-specification.md`](docs/technical-specification.md) for the full functional
+and technical specification (requirements, data model, sequence diagrams, security posture,
+verification evidence), [`docs/deployment.md`](docs/deployment.md) for how to stand up a new
+instance, and [`docs/exchange-application-access-policy.md`](docs/exchange-application-access-policy.md)
+for scoping the Graph app registration to only the mailboxes it should read.
 
 ## How it works
 
