@@ -26,15 +26,19 @@ jobs:
       sqlServerFqdn: ${{ steps.deploy.outputs.sqlServerFqdn }}
       sqlDatabaseName: ${{ steps.deploy.outputs.sqlDatabaseName }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # azure/arm-deploy has had no release since v2.0.0 (2024) and still runs on the deprecated
+      # Node 20 runtime — GitHub's runner silently forces it onto Node 24 with a warning in the logs
+      # (harmless, not our bug). Microsoft is deprecating this action in favor of azure/bicep-deploy;
+      # migrating is a separate, larger change since that action has a different input/output surface.
       - name: Deploy infrastructure (Bicep)
         id: deploy
         uses: azure/arm-deploy@v2
@@ -49,15 +53,15 @@ jobs:
     needs: infra
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -89,7 +93,7 @@ jobs:
           # "Active Directory Default" (not "Active Directory Access Token" — that mode only accepts a
           # token via the SqlConnection.AccessToken *property*, which a connection string can't express)
           # resolves credentials through Microsoft.Data.SqlClient's built-in Azure.Identity integration,
-          # which picks up the OIDC federated identity azure/login@v2 already established in this job.
+          # which picks up the OIDC federated identity azure/login@v3 already established in this job.
           CONNECTION_STRING="Server=tcp:${SQL_SERVER_FQDN},1433;Database=${SQL_DATABASE_NAME};Authentication=Active Directory Default;Encrypt=True;"
           /tmp/efbundle --connection "${CONNECTION_STRING}"
 

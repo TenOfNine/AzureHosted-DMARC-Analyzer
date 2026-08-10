@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 1.2 |
+| **Document version** | 1.3 |
 | **Date written** | 2026-08-10 (last updated 2026-08-10 — see [§7.4 Change log](#74-change-log)) |
 | **Document status** | Final — describes the as-built system on `main` plus this update's pending pull request |
 | **Repository** | `TenOfNine/AzureHosted-DMARC-Analyzer` |
@@ -502,3 +502,4 @@ automated test suite before merge, not merely style issues:
 | 1.0 | 2026-08-10 | Initial specification, describing the system as of commit `844b4ac`. |
 | 1.1 | 2026-08-10 | Added §3.5 Sender legitimacy scoring (FR-LEGIT-1–7): the `SenderReputation` aggregate, `SenderLegitimacyEvaluator` heuristic, reverse-DNS/FCrDNS check, the domain-detail page's sender-legitimacy table, and cross-cutting filter/sort capability on both detail tables. Renumbered the former §3.5/§3.6 to §3.6/§3.7 accordingly. Retired the standalone `IVerifiedSenderClassifier` abstraction and its two-state Verified/Unverified badge — superseded by the four-tier legitimacy verdict everywhere it was used; its override-matching logic survives as `SenderOverrideMatcher`. Updated data model, architecture/sequence diagrams, NFRs, and verification evidence (41 → 62 tests) accordingly. |
 | 1.2 | 2026-08-10 | Relicensed the project under the PolyForm Noncommercial License 1.0.0 (`LICENSE`) — noncommercial use, modification, and self-hosting permitted; commercial resale requires a separate agreement. Added two CI/CD checks (§4.6): `codeql.yml` (CodeQL static analysis for C#, on every PR/push plus a weekly schedule) and `dependency-review.yml` (fails PRs introducing high-severity vulnerable dependencies). Added a README Testing section documenting current pass/fail results and status badges. |
+| 1.3 | 2026-08-10 | Bumped `actions/checkout` (v4→v5), `actions/setup-dotnet` (v4→v5), `actions/upload-artifact` (v4→v6), `github/codeql-action` (v3→v4), `actions/dependency-review-action` (v4→v5), and `azure/login` (v2→v3) across all workflows to their first majors shipping a Node.js 24 runtime, clearing GitHub's Node 20 deprecation warning on those steps. `azure/arm-deploy` has had no release since v2.0.0 (2024) and remains on Node 20 — GitHub's runner silently forces it onto Node 24 already, so this is cosmetic, not a functional issue; a fix would require migrating to the replacement `azure/bicep-deploy` action, out of scope here. |
