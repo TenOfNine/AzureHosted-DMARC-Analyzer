@@ -29,7 +29,7 @@ public class MailboxPollingService(
         {
             try
             {
-                await PollAllMailboxesAsync(stoppingToken);
+                await PollOnceAsync(stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -38,7 +38,8 @@ public class MailboxPollingService(
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    private async Task PollAllMailboxesAsync(CancellationToken cancellationToken)
+    /// <summary>Runs a single poll cycle over every active mailbox. Public so it can be driven directly in tests without waiting on the timer loop.</summary>
+    public async Task PollOnceAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DmarcAnalyzerDbContext>();

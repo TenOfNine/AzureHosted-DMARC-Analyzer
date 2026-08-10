@@ -172,7 +172,7 @@ public class DmarcReportIngestionPipeline(
         var reportedIsPass = record.PolicyEvaluatedSpf == DmarcPolicyResult.Pass;
         var discrepancy = recomputedIsPass != reportedIsPass;
 
-        record.SpfEvaluation = new SpfEvaluationResult
+        var evaluation = new SpfEvaluationResult
         {
             Id = Guid.NewGuid(),
             DmarcRecordId = record.Id,
@@ -186,6 +186,12 @@ public class DmarcReportIngestionPipeline(
                 ? $"Report recorded SPF-aligned={reportedIsPass}; live DNS re-check today yields {outcome.Result}."
                 : null
         };
+
+        // Explicitly Add rather than relying only on the navigation-property assignment below: a new
+        // dependent with a pre-set (non-default) Guid key, discovered via change-tracker graph traversal
+        // instead of an explicit Add(), gets misidentified as Modified rather than Added.
+        db.SpfEvaluationResults.Add(evaluation);
+        record.SpfEvaluation = evaluation;
     }
 
     private async Task CheckDkimSelectorsAsync(DmarcRecord record, CancellationToken cancellationToken)
@@ -211,7 +217,7 @@ public class DmarcReportIngestionPipeline(
             var stale = dkimResult.Result == DkimResultCode.Pass
                 && checkResult.Status is DkimSelectorStatus.Missing or DkimSelectorStatus.Revoked;
 
-            dkimResult.SelectorCheck = new DkimSelectorCheck
+            var selectorCheck = new DkimSelectorCheck
             {
                 Id = Guid.NewGuid(),
                 DkimAuthResultId = dkimResult.Id,
@@ -220,6 +226,9 @@ public class DmarcReportIngestionPipeline(
                 RawTxtRecord = checkResult.RawTxtRecord,
                 StaleFlag = stale
             };
+
+            db.DkimSelectorChecks.Add(selectorCheck);
+            dkimResult.SelectorCheck = selectorCheck;
         }
     }
 }

@@ -149,7 +149,7 @@ public class SpfEvaluator(ISpfDnsResolver dnsResolver)
         return (SpfResultCode.Neutral, null, recordText);
     }
 
-    private bool MatchesIpMechanism(string? value, string mechanismName, IPAddress checkedIp)
+    private static bool MatchesIpMechanism(string? value, string mechanismName, IPAddress checkedIp)
     {
         if (string.IsNullOrEmpty(value))
         {
@@ -157,14 +157,16 @@ public class SpfEvaluator(ISpfDnsResolver dnsResolver)
         }
 
         var isIp6 = mechanismName == "ip6";
-        var networkText = value.Contains('/') ? value : $"{value}/{(isIp6 ? 128 : 32)}";
+        var slashIndex = value.IndexOf('/');
+        var addressText = slashIndex >= 0 ? value[..slashIndex] : value;
+        var prefixText = slashIndex >= 0 ? value[(slashIndex + 1)..] : (isIp6 ? "128" : "32");
 
-        if (!IPNetwork.TryParse(networkText, out var network))
+        if (!IPAddress.TryParse(addressText, out var networkAddress) || !int.TryParse(prefixText, out var prefixLength))
         {
             return false;
         }
 
-        return network.BaseAddress.AddressFamily == checkedIp.AddressFamily && network.Contains(checkedIp);
+        return IsInCidr(networkAddress, checkedIp, prefixLength);
     }
 
     private async Task<bool> MatchesAAsync(string? value, string currentDomain, IPAddress checkedIp, CancellationToken cancellationToken)
@@ -216,6 +218,13 @@ public class SpfEvaluator(ISpfDnsResolver dnsResolver)
         return addresses.Count > 0;
     }
 
+    /// <summary>
+    /// Whether <paramref name="checkedIp"/> falls within the /<paramref name="prefixLength"/> network
+    /// derived from <paramref name="candidate"/>. Implemented as a manual bitwise prefix comparison
+    /// rather than <see cref="IPNetwork"/>, because <c>candidate</c> here is typically a single resolved
+    /// A/AAAA host address (not a pre-masked network base address), and IPNetwork's constructor throws
+    /// if the base address has non-zero bits past the prefix.
+    /// </summary>
     private static bool IsInCidr(IPAddress candidate, IPAddress checkedIp, int prefixLength)
     {
         if (candidate.AddressFamily != checkedIp.AddressFamily)
@@ -223,8 +232,27 @@ public class SpfEvaluator(ISpfDnsResolver dnsResolver)
             return false;
         }
 
-        var network = new IPNetwork(candidate, prefixLength);
-        return network.Contains(checkedIp);
+        var candidateBytes = candidate.GetAddressBytes();
+        var checkedBytes = checkedIp.GetAddressBytes();
+        var bits = Math.Clamp(prefixLength, 0, candidateBytes.Length * 8);
+
+        var fullBytes = bits / 8;
+        for (var i = 0; i < fullBytes; i++)
+        {
+            if (candidateBytes[i] != checkedBytes[i])
+            {
+                return false;
+            }
+        }
+
+        var remainingBits = bits % 8;
+        if (remainingBits == 0)
+        {
+            return true;
+        }
+
+        var mask = (byte)(0xFF << (8 - remainingBits));
+        return (candidateBytes[fullBytes] & mask) == (checkedBytes[fullBytes] & mask);
     }
 
     private static (string Domain, int? Cidr4, int? Cidr6) SplitDomainCidr(string? value, string currentDomain)
