@@ -1,0 +1,23 @@
+@page
+@model DmarcAnalyzer.Web.Pages.Setup.WelcomeModel
+@{
+    Layout = "_SetupLayout";
+    ViewData["Title"] = "Welcome";
+    ViewData["StepIndex"] = 0;
+}
+
+@await Html.PartialAsync("_StepIndicator")
+
+<h2 class="h5 mb-3">Welcome</h2>
+<p>
+    This deployment isn't configured yet. The next few steps will connect it to your Microsoft Entra ID
+    app registration, tell it which sender domains and Exchange Online shared mailboxes to monitor, and
+    set a data retention window.
+</p>
+<p class="text-muted small">
+    You'll need: an Entra ID app registration with the Graph <code>Mail.Read</code> application permission
+    (admin-consented) and, ideally, an Exchange Online Application Access Policy scoping it to the shared
+    mailboxes below — see <code>docs/exchange-application-access-policy.md</code> in the repository for the
+    exact PowerShell steps.
+</p>
+<a class="btn btn-brand" asp-page="GraphConnection">Get started</a>

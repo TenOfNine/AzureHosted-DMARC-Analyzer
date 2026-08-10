@@ -1,0 +1,11 @@
+@{
+    var steps = new[] { "Welcome", "Graph Connection", "Domains", "Mailboxes", "Retention", "Review" };
+    var currentIndex = (int)(ViewData["StepIndex"] ?? 0);
+}
+<div class="setup-steps">
+    @for (var i = 0; i < steps.Length; i++)
+    {
+        var cls = i == currentIndex ? "active" : (i < currentIndex ? "done" : "");
+        <div class="setup-step @cls">@steps[i]</div>
+    }
+</div>

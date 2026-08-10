@@ -1,0 +1,25 @@
+@page
+@model DmarcAnalyzer.Web.Pages.Setup.RetentionModel
+@{
+    Layout = "_SetupLayout";
+    ViewData["Title"] = "Retention";
+    ViewData["StepIndex"] = 4;
+}
+
+@await Html.PartialAsync("_StepIndicator")
+
+<h2 class="h5 mb-3">Data retention</h2>
+<p class="text-muted small">
+    Aggregate report data older than this many days is purged automatically by a daily background job, so
+    the database doesn't grow without bound. You can change this later in Settings.
+</p>
+
+<form method="post">
+    <div class="mb-3">
+        <label asp-for="RetentionDays" class="form-label"></label>
+        <input asp-for="RetentionDays" type="number" class="form-control" style="max-width: 200px;" />
+        <span asp-validation-for="RetentionDays" class="text-danger small"></span>
+        <div class="form-text">Default is 400 days (~13 months of trend history).</div>
+    </div>
+    <button type="submit" class="btn btn-brand">Continue</button>
+</form>

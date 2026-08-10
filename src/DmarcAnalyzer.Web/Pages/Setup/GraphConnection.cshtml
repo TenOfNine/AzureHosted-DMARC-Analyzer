@@ -1,0 +1,45 @@
+@page
+@model DmarcAnalyzer.Web.Pages.Setup.GraphConnectionModel
+@{
+    Layout = "_SetupLayout";
+    ViewData["Title"] = "Graph Connection";
+    ViewData["StepIndex"] = 1;
+}
+
+@await Html.PartialAsync("_StepIndicator")
+
+<h2 class="h5 mb-3">Connect to Microsoft Graph</h2>
+<p class="text-muted small">
+    Enter the app registration used to read your Exchange Online shared mailboxes via Graph app-only
+    (client credentials) authentication. The client secret is written directly to Azure Key Vault and is
+    never stored in the database.
+</p>
+
+@if (Model.AlreadyConfigured)
+{
+    <div class="alert alert-info">A Graph connection is already configured. Submitting this form rotates the stored client secret.</div>
+}
+
+@if (Model.ValidationError is not null)
+{
+    <div class="alert alert-danger">@Model.ValidationError</div>
+}
+
+<form method="post">
+    <div class="mb-3">
+        <label asp-for="TenantId" class="form-label"></label>
+        <input asp-for="TenantId" class="form-control" placeholder="00000000-0000-0000-0000-000000000000" />
+        <span asp-validation-for="TenantId" class="text-danger small"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="ClientId" class="form-label"></label>
+        <input asp-for="ClientId" class="form-control" placeholder="00000000-0000-0000-0000-000000000000" />
+        <span asp-validation-for="ClientId" class="text-danger small"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="ClientSecret" class="form-label"></label>
+        <input asp-for="ClientSecret" class="form-control" autocomplete="off" />
+        <span asp-validation-for="ClientSecret" class="text-danger small"></span>
+    </div>
+    <button type="submit" class="btn btn-brand">Validate &amp; continue</button>
+</form>

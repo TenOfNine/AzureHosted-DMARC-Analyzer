@@ -1,0 +1,82 @@
+@page
+@model DmarcAnalyzer.Web.Pages.Setup.MailboxesModel
+@{
+    Layout = "_SetupLayout";
+    ViewData["Title"] = "Mailboxes";
+    ViewData["StepIndex"] = 3;
+}
+
+@await Html.PartialAsync("_StepIndicator")
+
+<h2 class="h5 mb-3">Shared mailboxes</h2>
+<p class="text-muted small">
+    Add every Exchange Online shared mailbox that receives RUA/RUF reports. All mailboxes are polled using
+    the same app registration credentials from the previous step — only the mailbox address differs. One
+    mailbox can serve several domains, and a domain's reports can also land in more than one mailbox.
+</p>
+
+@if (Model.AvailableDomains.Count == 0)
+{
+    <div class="alert alert-warning">Add at least one domain before adding mailboxes. <a asp-page="Domains">Go back</a>.</div>
+}
+else
+{
+    @if (Model.Mailboxes.Count > 0)
+    {
+        <ul class="list-group mb-3">
+            @foreach (var mailbox in Model.Mailboxes)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <div>@mailbox.MailboxUpn <span class="text-muted small">(@mailbox.MailFolder)</span></div>
+                        <div class="text-muted small">
+                            @string.Join(", ", mailbox.DomainMailboxes.Select(dm => dm.Domain.DomainName))
+                        </div>
+                    </div>
+                    <form method="post" asp-page-handler="Remove" asp-route-id="@mailbox.Id" class="m-0">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                    </form>
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <p class="text-muted">No mailboxes added yet.</p>
+    }
+
+    @if (Model.ValidationError is not null)
+    {
+        <div class="alert alert-danger">@Model.ValidationError</div>
+    }
+
+    <form method="post" asp-page-handler="Add" class="mb-4">
+        <div class="mb-3">
+            <label asp-for="NewMailboxUpn" class="form-label"></label>
+            <input asp-for="NewMailboxUpn" class="form-control" placeholder="dmarc-reports@contoso.com" />
+            <span asp-validation-for="NewMailboxUpn" class="text-danger small"></span>
+        </div>
+        <div class="mb-3">
+            <label asp-for="NewDisplayName" class="form-label"></label>
+            <input asp-for="NewDisplayName" class="form-control" />
+        </div>
+        <div class="mb-3">
+            <label asp-for="NewMailFolder" class="form-label"></label>
+            <input asp-for="NewMailFolder" class="form-control" />
+            <div class="form-text">Well-known folder name (e.g. "inbox") or a raw Graph folder ID.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Serves domain(s)</label>
+            @foreach (var domain in Model.AvailableDomains)
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="SelectedDomainIds" value="@domain.Id" id="domain-@domain.Id" />
+                    <label class="form-check-label" for="domain-@domain.Id">@domain.DomainName</label>
+                </div>
+            }
+        </div>
+        <button type="submit" class="btn btn-outline-secondary">Add mailbox</button>
+    </form>
+}
+
+<a class="btn btn-brand" asp-page="Retention">Continue</a>

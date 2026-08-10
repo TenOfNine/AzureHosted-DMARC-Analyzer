@@ -1,0 +1,43 @@
+@page
+@model DmarcAnalyzer.Web.Pages.Setup.DomainsModel
+@{
+    Layout = "_SetupLayout";
+    ViewData["Title"] = "Domains";
+    ViewData["StepIndex"] = 2;
+}
+
+@await Html.PartialAsync("_StepIndicator")
+
+<h2 class="h5 mb-3">Monitored domains</h2>
+<p class="text-muted small">
+    Add every sender domain whose DMARC aggregate/forensic reports you want analyzed. A report is matched
+    to a domain by its own <code>policy_published/domain</code> value, so add exactly the domain(s) that
+    publish DMARC policies, not the mailbox address.
+</p>
+
+@if (Model.Domains.Count > 0)
+{
+    <ul class="list-group mb-3">
+        @foreach (var domain in Model.Domains)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                @domain.DomainName
+                <form method="post" asp-page-handler="Remove" asp-route-id="@domain.Id" class="m-0">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                </form>
+            </li>
+        }
+    </ul>
+}
+else
+{
+    <p class="text-muted">No domains added yet.</p>
+}
+
+<form method="post" asp-page-handler="Add" class="d-flex gap-2 mb-4">
+    <input asp-for="NewDomainName" class="form-control" placeholder="contoso.com" />
+    <button type="submit" class="btn btn-outline-secondary text-nowrap">Add domain</button>
+</form>
+<span asp-validation-for="NewDomainName" class="text-danger small"></span>
+
+<a class="btn btn-brand" asp-page="Mailboxes">Continue</a>

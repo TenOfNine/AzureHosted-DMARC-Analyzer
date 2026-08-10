@@ -1,0 +1,41 @@
+@page
+@model DmarcAnalyzer.Web.Pages.Setup.ReviewModel
+@{
+    Layout = "_SetupLayout";
+    ViewData["Title"] = "Review";
+    ViewData["StepIndex"] = 5;
+}
+
+@await Html.PartialAsync("_StepIndicator")
+
+<h2 class="h5 mb-3">Review</h2>
+
+<ul class="list-group mb-4">
+    <li class="list-group-item d-flex justify-content-between">
+        Graph connection
+        <span class="@(Model.GraphConfigured ? "text-success" : "text-danger")">@(Model.GraphConfigured ? "Configured" : "Not configured")</span>
+    </li>
+    <li class="list-group-item d-flex justify-content-between">
+        Domains
+        <span>@Model.DomainCount</span>
+    </li>
+    <li class="list-group-item d-flex justify-content-between">
+        Mailboxes
+        <span>@Model.MailboxCount</span>
+    </li>
+    <li class="list-group-item d-flex justify-content-between">
+        Retention
+        <span>@Model.RetentionDays days</span>
+    </li>
+</ul>
+
+@if (Model.IsSetupComplete)
+{
+    <div class="alert alert-success">Setup is complete. The mailbox polling job will start picking up reports on its next cycle.</div>
+    <a class="btn btn-brand" href="/">Go to dashboard</a>
+}
+else
+{
+    <div class="alert alert-warning">Setup isn't complete yet — go back and fill in whatever's missing above.</div>
+    <a class="btn btn-outline-secondary" asp-page="Welcome">Back to start</a>
+}
