@@ -47,6 +47,64 @@ scoping the Graph app registration to only the mailboxes it should read.
    "verified sender" badge (DMARC-aligned pass, or an admin-curated allowlist entry).
 5. Report data older than a configurable retention window is purged automatically.
 
+## Screenshots
+
+*Illustrative screenshots from a local run seeded with sample data — not a real tenant.*
+
+### Dashboard — per-domain overview
+
+![Dashboard](docs/images/dashboard.png)
+
+`/Dashboard` (also the app's root URL). One card per monitored domain: 30-day message volume,
+DMARC-aligned pass rate, and the last report received. Click a card to drill in.
+
+### Domain detail — trend chart and per-record verification
+
+![Domain detail](docs/images/domain-detail.png)
+
+`/Dashboard/DomainDetail`. Daily pass/fail volume chart, plus every record with its SPF/DKIM
+verdicts, disposition, and a **Verified**/**Unverified** sender badge. The two amber badges here
+are the "beyond what the report claims" checks: **record changed** means today's live SPF
+re-evaluation for that source IP no longer agrees with what the report recorded, and
+**selector stale** means the DKIM selector it signed with has since been revoked or removed from
+DNS. Filter by time window or unverified-only via the controls top right.
+
+### Settings hub
+
+![Settings](docs/images/settings.png)
+
+`/Settings`. Central entry point to every configuration area below.
+
+### Domains and shared mailboxes
+
+![Domains](docs/images/settings-domains.png)
+![Mailboxes](docs/images/settings-mailboxes.png)
+
+`/Setup/Domains` and `/Setup/Mailboxes` (these pages serve double duty as both the first-run setup
+wizard *and* the ongoing settings pages — nothing changes once initial setup is done, they stay
+directly reachable). This is where the "one App Registration, several shared mailboxes, each
+mailbox serving one or more domains" configuration happens — see the mailbox list showing
+`dmarc-reports@contoso.com` serving both `contoso.com` and `fabrikam.com`, and each mailbox's
+domain checkboxes on the add form.
+
+### Ingestion status
+
+![Ingestion status](docs/images/ingestion-status.png)
+
+`/Settings/IngestionStatus`. Per-mailbox last-poll timestamp/status/error (here `dmarc@fabrikam.com`
+shows a simulated Graph auth failure), the retention job's last run, and recent per-message
+processing failures — the operational view for "is ingestion actually working."
+
+### First-run setup wizard
+
+![Setup welcome](docs/images/setup-welcome.png)
+![Graph connection](docs/images/setup-graph-connection.png)
+
+`/Setup/Welcome` onward. Walks through connecting the Entra ID app registration (validated live
+against Graph before anything is saved, then the secret is written straight to Key Vault), adding
+domains and mailboxes, and setting the retention window. A fresh deployment redirects here
+automatically until all of it is complete.
+
 ## Development
 
 ```bash
