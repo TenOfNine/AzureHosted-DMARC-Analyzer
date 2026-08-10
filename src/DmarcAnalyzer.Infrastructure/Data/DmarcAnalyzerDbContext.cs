@@ -18,6 +18,7 @@ public class DmarcAnalyzerDbContext(DbContextOptions<DmarcAnalyzerDbContext> opt
     public DbSet<SpfEvaluationResult> SpfEvaluationResults => Set<SpfEvaluationResult>();
     public DbSet<DkimSelectorCheck> DkimSelectorChecks => Set<DkimSelectorCheck>();
     public DbSet<VerifiedSenderOverride> VerifiedSenderOverrides => Set<VerifiedSenderOverride>();
+    public DbSet<SenderReputation> SenderReputations => Set<SenderReputation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

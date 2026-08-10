@@ -1,58 +1,160 @@
 @page
+@using DmarcAnalyzer.Core.Entities
 @model DmarcAnalyzer.Web.Pages.Dashboard.DomainDetailModel
 @{
     ViewData["Title"] = Model.Domain?.DomainName ?? "Domain";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <a asp-page="Index" class="text-muted small">&larr; All domains</a>
-        <h1 class="h4 mb-0">@Model.Domain?.DomainName</h1>
-    </div>
-    <form method="get" class="d-flex gap-2 align-items-center">
-        <input type="hidden" name="DomainId" value="@Model.DomainId" />
-        <select name="Days" class="form-select form-select-sm" onchange="this.form.submit()">
-            <option value="7" selected="@(Model.Days == 7)">Last 7 days</option>
-            <option value="30" selected="@(Model.Days == 30)">Last 30 days</option>
-            <option value="90" selected="@(Model.Days == 90)">Last 90 days</option>
-        </select>
-        <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" name="UnverifiedOnly" value="true" id="unverifiedOnly" @(Model.UnverifiedOnly ? "checked" : "") onchange="this.form.submit()" />
-            <label class="form-check-label small" for="unverifiedOnly">Unverified only</label>
-        </div>
-    </form>
+<div class="mb-3">
+    <a asp-page="Index" class="text-muted small">&larr; All domains</a>
+    <h1 class="h4 mb-0">@Model.Domain?.DomainName</h1>
 </div>
+
+<form method="get" class="stat-card mb-4">
+    <input type="hidden" name="DomainId" value="@Model.DomainId" />
+    <div class="row g-2 align-items-end">
+        <div class="col-auto">
+            <label class="form-label small mb-1">Time window</label>
+            <select name="Days" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="7" selected="@(Model.Days == 7)">Last 7 days</option>
+                <option value="30" selected="@(Model.Days == 30)">Last 30 days</option>
+                <option value="90" selected="@(Model.Days == 90)">Last 90 days</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">Legitimacy</label>
+            <select name="LegitimacyFilter" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">All</option>
+                @foreach (var level in Enum.GetValues<SenderLegitimacyLevel>())
+                {
+                    <option value="@level" selected="@(Model.LegitimacyFilter == level)">@level</option>
+                }
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">SPF</label>
+            <select name="SpfFilter" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Any</option>
+                <option value="Pass" selected="@(Model.SpfFilter == DmarcPolicyResult.Pass)">Pass</option>
+                <option value="Fail" selected="@(Model.SpfFilter == DmarcPolicyResult.Fail)">Fail</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">DKIM</label>
+            <select name="DkimFilter" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Any</option>
+                <option value="Pass" selected="@(Model.DkimFilter == DmarcPolicyResult.Pass)">Pass</option>
+                <option value="Fail" selected="@(Model.DkimFilter == DmarcPolicyResult.Fail)">Fail</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">Disposition</label>
+            <select name="DispositionFilter" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Any</option>
+                @foreach (var disposition in Enum.GetValues<DmarcDisposition>())
+                {
+                    <option value="@disposition" selected="@(Model.DispositionFilter == disposition)">@disposition</option>
+                }
+            </select>
+        </div>
+        <div class="col-auto flex-grow-1" style="min-width: 200px;">
+            <label class="form-label small mb-1">Search (IP, org, hostname)</label>
+            <input type="text" name="Search" value="@Model.Search" class="form-control form-control-sm" placeholder="203.0.113.5" />
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-brand btn-sm">Apply</button>
+            <a asp-page="DomainDetail" asp-route-domainId="@Model.DomainId" class="btn btn-outline-secondary btn-sm">Reset</a>
+        </div>
+    </div>
+</form>
 
 <div class="stat-card mb-4">
     <canvas id="trendChart" height="80"></canvas>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-sm table-hover align-middle">
+<h2 class="h6">Sender legitimacy</h2>
+<p class="text-muted small">
+    Every source IP ever seen for this domain, with its cumulative DMARC-aligned pass history, its
+    current live SPF/DKIM standing, and a reverse-DNS check — combined into an overall legitimacy
+    verdict. This is independent of the time window above (it reflects everything on record for
+    that sender, not just the selected window). Click a column header to sort.
+</p>
+<div class="table-responsive mb-4">
+    <table class="table table-sm table-hover sortable-table">
         <thead>
             <tr>
-                <th>Report date</th>
-                <th>Source IP</th>
-                <th>Reporting org</th>
-                <th class="text-end">Volume</th>
-                <th>SPF</th>
-                <th>DKIM</th>
-                <th>Disposition</th>
-                <th>Sender</th>
+                <th data-sort="text">Source IP</th>
+                <th data-sort="text">Reverse DNS</th>
+                <th data-sort="numeric">First seen</th>
+                <th data-sort="numeric">Last seen</th>
+                <th data-sort="numeric" class="text-end">Volume</th>
+                <th data-sort="numeric" class="text-end">Aligned pass</th>
+                <th data-sort="text">Current SPF</th>
+                <th data-sort="numeric">Legitimacy</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Senders.Count == 0)
+            {
+                <tr><td colspan="8" class="text-muted text-center py-4">No senders match the current filters.</td></tr>
+            }
+            @foreach (var sender in Model.Senders)
+            {
+                <tr>
+                    <td><code>@sender.SourceIp</code></td>
+                    <td class="text-muted small">
+                        @if (sender.ReverseDnsHostname is not null)
+                        {
+                            @sender.ReverseDnsHostname
+                            if (sender.ForwardConfirmed)
+                            {
+                                <span title="Forward-confirmed: this hostname's own DNS record resolves back to the same IP.">&check;</span>
+                            }
+                        }
+                        else
+                        {
+                            <text>&mdash;</text>
+                        }
+                    </td>
+                    <td data-sort-value="@sender.FirstSeenUtc.Ticks">@sender.FirstSeenUtc.ToString("yyyy-MM-dd")</td>
+                    <td data-sort-value="@sender.LastSeenUtc.Ticks">@sender.LastSeenUtc.ToString("yyyy-MM-dd")</td>
+                    <td class="text-end" data-sort-value="@sender.TotalVolume">@sender.TotalVolume.ToString("N0")</td>
+                    <td class="text-end" data-sort-value="@sender.AlignedPassRatio">@((sender.AlignedPassRatio * 100).ToString("0.#"))%</td>
+                    <td>@sender.CurrentSpfResult</td>
+                    <td data-sort-value="@((int)sender.LegitimacyLevel)">@await Html.PartialAsync("_LegitimacyBadge", sender.LegitimacyLevel)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<h2 class="h6">Records</h2>
+<div class="table-responsive">
+    <table class="table table-sm table-hover sortable-table">
+        <thead>
+            <tr>
+                <th data-sort="numeric">Report date</th>
+                <th data-sort="text">Source IP</th>
+                <th data-sort="text">Reporting org</th>
+                <th data-sort="numeric" class="text-end">Volume</th>
+                <th data-sort="text">SPF</th>
+                <th data-sort="text">DKIM</th>
+                <th data-sort="text">Disposition</th>
+                <th data-sort="numeric">Legitimacy</th>
             </tr>
         </thead>
         <tbody>
             @if (Model.Records.Count == 0)
             {
-                <tr><td colspan="8" class="text-muted text-center py-4">No records for this window.</td></tr>
+                <tr><td colspan="8" class="text-muted text-center py-4">No records match the current filters.</td></tr>
             }
             @foreach (var record in Model.Records)
             {
                 <tr>
-                    <td>@record.ReportDate.ToString("yyyy-MM-dd")</td>
+                    <td data-sort-value="@record.ReportDate.Ticks">@record.ReportDate.ToString("yyyy-MM-dd")</td>
                     <td><code>@record.SourceIp</code></td>
                     <td>@record.OrgName</td>
-                    <td class="text-end">@record.Count.ToString("N0")</td>
+                    <td class="text-end" data-sort-value="@record.Count">@record.Count.ToString("N0")</td>
                     <td>
                         @record.SpfResult
                         @if (record.SpfDiscrepancy)
@@ -68,16 +170,7 @@
                         }
                     </td>
                     <td>@record.Disposition</td>
-                    <td>
-                        @if (record.Verified)
-                        {
-                            <span class="badge badge-verified">Verified</span>
-                        }
-                        else
-                        {
-                            <span class="badge badge-unverified">Unverified</span>
-                        }
-                    </td>
+                    <td data-sort-value="@((int)record.Legitimacy)">@await Html.PartialAsync("_LegitimacyBadge", record.Legitimacy)</td>
                 </tr>
             }
         </tbody>
@@ -86,6 +179,7 @@
 
 @section Scripts {
     <script src="~/lib/chartjs/chart.umd.js"></script>
+    <script src="~/js/sortable-table.js" asp-append-version="true"></script>
     <script>
         (function () {
             const domainId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DomainId));

@@ -1,9 +1,12 @@
 using System.Net;
+using System.Net.Sockets;
 using DmarcAnalyzer.Core.Abstractions;
 using DmarcAnalyzer.Core.Dkim;
 using DmarcAnalyzer.Core.Dmarc;
 using DmarcAnalyzer.Core.Entities;
+using DmarcAnalyzer.Core.Legitimacy;
 using DmarcAnalyzer.Core.Spf;
+using DmarcAnalyzer.Core.Verification;
 using DmarcAnalyzer.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -14,6 +17,8 @@ public class DmarcReportIngestionPipeline(
     DmarcAnalyzerDbContext db,
     SpfEvaluator spfEvaluator,
     DkimSelectorChecker dkimSelectorChecker,
+    ISpfDnsResolver forwardDnsResolver,
+    IReverseDnsResolver reverseDnsResolver,
     ILogger<DmarcReportIngestionPipeline> logger) : IDmarcReportIngestionPipeline
 {
     public async Task<IngestionOutcome> ProcessMessageAsync(
@@ -68,10 +73,20 @@ public class DmarcReportIngestionPipeline(
         db.AggregateReports.Add(report);
         await db.SaveChangesAsync(cancellationToken);
 
+        var overrides = await db.VerifiedSenderOverrides
+            .Where(v => v.DomainId == domain.Id)
+            .ToListAsync(cancellationToken);
+
+        // Keyed cache so two records in the same report for the same source IP (rare, but not
+        // impossible) reuse one tracked SenderReputation instance instead of racing to insert two
+        // rows that would violate the (DomainId, SourceIp) unique index at SaveChanges.
+        var reputationCache = new Dictionary<string, SenderReputation>();
+
         foreach (var record in report.Records)
         {
             await EvaluateSpfAsync(domain.DomainName, record, cancellationToken);
             await CheckDkimSelectorsAsync(record, cancellationToken);
+            await UpsertSenderReputationAsync(domain, record, overrides, reputationCache, cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);
@@ -230,5 +245,91 @@ public class DmarcReportIngestionPipeline(
             db.DkimSelectorChecks.Add(selectorCheck);
             dkimResult.SelectorCheck = selectorCheck;
         }
+    }
+
+    /// <summary>
+    /// Upserts the (domain, source IP) reputation aggregate: rolls the record's volume into the
+    /// cumulative aligned-pass history, refreshes the current SPF/DKIM standing from what was just
+    /// computed above, performs a forward-confirmed reverse-DNS check, and re-scores the overall
+    /// <see cref="SenderLegitimacyLevel"/> via <see cref="SenderLegitimacyEvaluator"/>.
+    /// </summary>
+    private async Task UpsertSenderReputationAsync(
+        Domain domain,
+        DmarcRecord record,
+        IReadOnlyList<VerifiedSenderOverride> overrides,
+        Dictionary<string, SenderReputation> reputationCache,
+        CancellationToken cancellationToken)
+    {
+        if (!IPAddress.TryParse(record.SourceIp, out var sourceIp))
+        {
+            return;
+        }
+
+        if (!reputationCache.TryGetValue(record.SourceIp, out var reputation))
+        {
+            reputation = await db.SenderReputations
+                .FirstOrDefaultAsync(r => r.DomainId == domain.Id && r.SourceIp == record.SourceIp, cancellationToken);
+
+            var isNew = reputation is null;
+            reputation ??= new SenderReputation
+            {
+                Id = Guid.NewGuid(),
+                DomainId = domain.Id,
+                SourceIp = record.SourceIp,
+                FirstSeenUtc = DateTime.UtcNow
+            };
+
+            if (isNew)
+            {
+                db.SenderReputations.Add(reputation);
+            }
+
+            reputationCache[record.SourceIp] = reputation;
+        }
+
+        reputation.LastSeenUtc = DateTime.UtcNow;
+        reputation.TotalVolume += record.Count;
+
+        var isAlignedPass = record.PolicyEvaluatedDkim == DmarcPolicyResult.Pass || record.PolicyEvaluatedSpf == DmarcPolicyResult.Pass;
+        if (isAlignedPass)
+        {
+            reputation.AlignedPassVolume += record.Count;
+        }
+
+        reputation.CurrentSpfResult = record.SpfEvaluation?.RecomputedResult ?? SpfResultCode.None;
+        reputation.CurrentDkimStale = record.DkimAuthResults.Any(d => d.SelectorCheck is { StaleFlag: true });
+        reputation.IsOverrideMatch = SenderOverrideMatcher.Matches(record, overrides);
+
+        string? ptrHostname = null;
+        var forwardConfirmed = false;
+        try
+        {
+            ptrHostname = await reverseDnsResolver.GetPtrHostnameAsync(sourceIp, cancellationToken);
+            if (!string.IsNullOrEmpty(ptrHostname))
+            {
+                var forwardAddresses = sourceIp.AddressFamily == AddressFamily.InterNetwork
+                    ? await forwardDnsResolver.ResolveAAsync(ptrHostname, cancellationToken)
+                    : await forwardDnsResolver.ResolveAaaaAsync(ptrHostname, cancellationToken);
+                forwardConfirmed = forwardAddresses.Any(a => a.Equals(sourceIp));
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Reverse DNS check failed for {SourceIp}", record.SourceIp);
+        }
+
+        reputation.ReverseDnsHostname = ptrHostname;
+        reputation.ForwardConfirmed = forwardConfirmed;
+
+        var signals = new SenderLegitimacySignals(
+            AlignedPassRatio: reputation.AlignedPassRatio,
+            CurrentSpfResult: reputation.CurrentSpfResult,
+            CurrentDkimStale: reputation.CurrentDkimStale,
+            HasReverseDns: !string.IsNullOrEmpty(ptrHostname),
+            ForwardConfirmed: forwardConfirmed,
+            IsOverrideMatch: reputation.IsOverrideMatch);
+
+        reputation.LegitimacyLevel = SenderLegitimacyEvaluator.Evaluate(signals);
+        reputation.LastEvaluatedUtc = DateTime.UtcNow;
     }
 }

@@ -1,7 +1,7 @@
 using DmarcAnalyzer.Core.Abstractions;
 using DmarcAnalyzer.Core.Dkim;
+using DmarcAnalyzer.Core.Legitimacy;
 using DmarcAnalyzer.Core.Spf;
-using DmarcAnalyzer.Core.Verification;
 using DmarcAnalyzer.Infrastructure.Data;
 using DmarcAnalyzer.Infrastructure.Dns;
 using DmarcAnalyzer.Infrastructure.Graph;
@@ -31,11 +31,11 @@ builder.Services.AddScoped<GraphClientFactory>();
 builder.Services.AddScoped<IGraphMailboxClient, GraphMailboxClient>();
 builder.Services.AddScoped<ISpfDnsResolver, DnsClientSpfResolver>();
 builder.Services.AddScoped<IDkimDnsResolver, DnsClientDkimResolver>();
+builder.Services.AddScoped<IReverseDnsResolver, DnsClientReverseDnsResolver>();
 builder.Services.AddScoped<SpfEvaluator>();
 builder.Services.AddScoped<DkimSelectorChecker>();
 builder.Services.AddScoped<IDmarcReportIngestionPipeline, DmarcReportIngestionPipeline>();
 builder.Services.AddScoped<ISetupStateService, SetupStateService>();
-builder.Services.AddSingleton<IVerifiedSenderClassifier, VerifiedSenderClassifier>();
 
 builder.Services.Configure<IngestionOptions>(builder.Configuration.GetSection(IngestionOptions.SectionName));
 builder.Services.Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));

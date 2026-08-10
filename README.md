@@ -45,9 +45,15 @@ for scoping the Graph app registration to only the mailboxes it should read.
    (full RFC 7208: recursive includes, redirect, CIDR matching, the 10-lookup limit) and compared
    against what the report itself claimed — a mismatch is flagged as a discrepancy. DKIM selectors
    are checked for continued DNS presence, flagging ones that have since been rotated or revoked.
-4. The dashboard shows per-domain pass-rate trends and a per-record breakdown with a
-   "verified sender" badge (DMARC-aligned pass, or an admin-curated allowlist entry).
-5. Report data older than a configurable retention window is purged automatically.
+4. Every source IP is also scored for overall **sender legitimacy** — combining its cumulative
+   DMARC-aligned pass history, its current live SPF/DKIM standing, an admin allowlist match, and a
+   forward-confirmed reverse-DNS check — into a Verified/Likely legitimate/Unverified/Suspicious
+   verdict (see [`docs/technical-specification.md`](docs/technical-specification.md#35-sender-legitimacy-scoring)
+   for the exact rules).
+5. The dashboard shows per-domain pass-rate trends, a dedicated sender-legitimacy table, and a
+   per-record breakdown — all filterable by legitimacy level, SPF/DKIM result, disposition, or a
+   free-text search, with sortable columns.
+6. Report data older than a configurable retention window is purged automatically.
 
 ## Screenshots
 
@@ -60,16 +66,28 @@ for scoping the Graph app registration to only the mailboxes it should read.
 `/Dashboard` (also the app's root URL). One card per monitored domain: 30-day message volume,
 DMARC-aligned pass rate, and the last report received. Click a card to drill in.
 
-### Domain detail — trend chart and per-record verification
+### Domain detail — trend chart, sender legitimacy, and per-record verification
 
 ![Domain detail](docs/images/domain-detail.png)
 
-`/Dashboard/DomainDetail`. Daily pass/fail volume chart, plus every record with its SPF/DKIM
-verdicts, disposition, and a **Verified**/**Unverified** sender badge. The two amber badges here
-are the "beyond what the report claims" checks: **record changed** means today's live SPF
-re-evaluation for that source IP no longer agrees with what the report recorded, and
-**selector stale** means the DKIM selector it signed with has since been revoked or removed from
-DNS. Filter by time window or unverified-only via the controls top right.
+`/Dashboard/DomainDetail`. Filter bar (time window, legitimacy level, SPF/DKIM result,
+disposition, free-text search), the daily pass/fail volume chart, a **sender legitimacy** table
+(one row per source IP ever seen, with its reverse-DNS hostname, cumulative volume/pass rate,
+current live SPF standing, and overall legitimacy badge — click a header to sort), and the
+per-record table below it carrying the same legitimacy badge plus the two "beyond what the report
+claims" flags: **record changed** (today's live SPF re-evaluation for that source IP no longer
+agrees with what the report recorded) and **selector stale** (the DKIM selector it signed with has
+since been revoked or removed from DNS).
+
+![Sorted by legitimacy](docs/images/sender-legitimacy-sorted.png)
+
+Every column header in both tables is clickable — here the sender table is sorted by legitimacy
+level (note the ↑ indicator and the active blue header).
+
+![Filtered to suspicious senders](docs/images/legitimacy-filter-suspicious.png)
+
+The legitimacy filter applied to `Suspicious` — this is what "find the non-legitimate senders"
+looks like in practice: both tables collapse to just the flagged sender/records.
 
 ### Settings hub
 

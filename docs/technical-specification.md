@@ -4,11 +4,11 @@
 
 | | |
 |---|---|
-| **Document version** | 1.0 |
-| **Date written** | 2026-08-10 |
-| **Document status** | Final — describes the as-built system on `main` |
+| **Document version** | 1.1 |
+| **Date written** | 2026-08-10 (last updated 2026-08-10 — see [§7.4 Change log](#74-change-log)) |
+| **Document status** | Final — describes the as-built system on `main` plus this update's pending pull request |
 | **Repository** | `TenOfNine/AzureHosted-DMARC-Analyzer` |
-| **Scope** | This document specifies the system as implemented. It is a reference for operating, extending, and reviewing the application — not a forward-looking proposal. Where a capability is intentionally out of scope for the current implementation, it is called out explicitly under [§3.6](#36-explicitly-out-of-scope) and [§7.1](#71-glossary). |
+| **Scope** | This document specifies the system as implemented. It is a reference for operating, extending, and reviewing the application — not a forward-looking proposal. Where a capability is intentionally out of scope for the current implementation, it is called out explicitly under [§3.7](#37-explicitly-out-of-scope) and [§7.1](#71-glossary). |
 
 This document complements [`README.md`](../README.md) (quick orientation and screenshots) and
 [`docs/deployment.md`](./deployment.md) (deployment runbook). It is the detailed reference for
@@ -72,7 +72,7 @@ Requirements are grouped by capability area and tagged with an ID for traceabili
 | FR-ING-5 | RUA attachments are accepted as `.zip`, `.gz`, or raw `.xml`; the correct handler is chosen by file extension and the XML is extracted transparently. | `AttachmentExtractor.TryExtractXml` (`src/DmarcAnalyzer.Infrastructure/Ingestion/AttachmentExtractor.cs`). |
 | FR-ING-6 | A message with no recognizable DMARC attachment is recorded as **Skipped**, not **Failed**. | `DmarcReportIngestionPipeline.ProcessMessageAsync`. |
 | FR-ING-7 | A report is attributed to a monitored `Domain` by the report's own `policy_published/domain` value (case-insensitive match), not by which mailbox it arrived in. A report for a domain not registered in the system is recorded as **Skipped** with the domain name in the reason. | `DmarcReportIngestionPipeline.ProcessMessageAsync`; this is what allows one shared mailbox to receive reports for several domains and a domain's reports to arrive across several mailboxes (see FR-CFG-3). |
-| FR-ING-8 | RUF (forensic) attachments are recognized by the extractor but are not deep-parsed in the current implementation (see [§3.6](#36-explicitly-out-of-scope)). | `AttachmentType.Ruf` is defined but not produced by `AttachmentExtractor`; only RUA (zip/gzip/xml) is parsed today. |
+| FR-ING-8 | RUF (forensic) attachments are recognized by the extractor but are not deep-parsed in the current implementation (see [§3.7](#37-explicitly-out-of-scope)). | `AttachmentType.Ruf` is defined but not produced by `AttachmentExtractor`; only RUA (zip/gzip/xml) is parsed today. |
 
 ### 3.2 DMARC aggregate report parsing
 
@@ -93,7 +93,7 @@ Requirements are grouped by capability area and tagged with an ID for traceabili
 | FR-SPF-4 | The total number of mechanisms/modifiers that trigger a DNS lookup (`a`, `mx`, `include`, `exists`, `ptr`, `redirect`) is capped at 10 across the whole recursive evaluation; exceeding it yields `PermError`. | `SpfEvaluator.LookupCounter`, shared across the recursion tree. |
 | FR-SPF-5 | Zero SPF TXT records resolves to `None`; more than one resolves to `PermError`. | `SpfEvaluator.EvaluateDomainAsync`. |
 | FR-SPF-6 | CIDR containment (`ip4`/`ip6` mechanisms, and matching a resolved `a`/`mx` host address against the checked IP) is computed via manual bitwise prefix comparison, not .NET's `IPNetwork` type — the latter rejects a base address with non-zero host bits, which resolved A/AAAA host addresses routinely have. | `SpfEvaluator.IsInCidr`. (See [§7.3](#73-known-defects-fixed-during-development) — this was a defect found and fixed during development.) |
-| FR-SPF-7 | Macro expansion (RFC 7208 §7) is explicitly not implemented; `include`/`redirect`/`exists` arguments are treated as literal domains. | Documented in a code comment on `SpfEvaluator`; see [§3.6](#36-explicitly-out-of-scope). |
+| FR-SPF-7 | Macro expansion (RFC 7208 §7) is explicitly not implemented; `include`/`redirect`/`exists` arguments are treated as literal domains. | Documented in a code comment on `SpfEvaluator`; see [§3.7](#37-explicitly-out-of-scope). |
 | FR-SPF-8 | When the recomputed result disagrees with the record's own `policy_evaluated/spf` verdict, the discrepancy is flagged and persisted with an explanatory note. | `SpfEvaluationResult.DiscrepancyFlag`/`DiscrepancyNote`, computed in `DmarcReportIngestionPipeline.EvaluateSpfAsync`; surfaced in the UI as a **record changed** badge. |
 
 ### 3.4 DKIM verification
@@ -103,9 +103,25 @@ Requirements are grouped by capability area and tagged with an ID for traceabili
 | FR-DKIM-1 | For every reported DKIM auth-result that includes a selector, independently query `{selector}._domainkey.{domain}` and parse the returned key record. | `DkimSelectorChecker.CheckAsync` (`src/DmarcAnalyzer.Core/Dkim/DkimSelectorChecker.cs`). |
 | FR-DKIM-2 | Classify the selector as **Valid** (well-formed `p=` tag with valid base64), **Revoked** (empty `p=` tag, per RFC 6376 §3.6.1), **Missing** (no TXT record at all), or **ParseError** (record present but malformed/no `p=` tag). | `DkimSelectorChecker.CheckAsync`. |
 | FR-DKIM-3 | If the report claimed a DKIM **Pass** for a selector that is now Missing or Revoked, flag it as stale. | `DkimSelectorCheck.StaleFlag`; surfaced in the UI as a **selector stale** badge. |
-| FR-DKIM-4 | Full cryptographic re-verification of the DKIM signature (which would require the original signed message) is explicitly out of scope — aggregate reports carry only pass/fail + selector, not the signature or signed content. | Documented in code comments; see [§3.6](#36-explicitly-out-of-scope). |
+| FR-DKIM-4 | Full cryptographic re-verification of the DKIM signature (which would require the original signed message) is explicitly out of scope — aggregate reports carry only pass/fail + selector, not the signature or signed content. | Documented in code comments; see [§3.7](#37-explicitly-out-of-scope). |
 
-### 3.5 Configuration, setup, and multi-instance support
+### 3.5 Sender legitimacy scoring
+
+Beyond the per-record SPF/DKIM re-checks in §3.3/§3.4, the system maintains a continuously-updated
+legitimacy assessment **per (domain, source IP)** — aggregating everything known about that sender
+across every report ever ingested for it, not just a single record's data point.
+
+| ID | Requirement | Implementation |
+|---|---|---|
+| FR-LEGIT-1 | Every time a record is ingested, upsert a per-(domain, source IP) reputation aggregate: cumulative message volume, cumulative DMARC-aligned pass volume, and the timestamps of first/last seen. | `SenderReputation` entity; `DmarcReportIngestionPipeline.UpsertSenderReputationAsync`. |
+| FR-LEGIT-2 | The aggregate also carries the *current* standing, refreshed on every new record for that sender: the live-recomputed SPF result (§3.3) and whether any of its DKIM selectors are stale (§3.4) — not a stale copy of the first-ever check. | `SenderReputation.CurrentSpfResult` / `CurrentDkimStale`. |
+| FR-LEGIT-3 | Independently of DMARC/SPF/DKIM, perform a reverse-DNS (PTR) lookup for the source IP, and — if a PTR hostname exists — a forward-confirmation check (that hostname's own A/AAAA records resolve back to the same source IP; "FCrDNS"). | `IReverseDnsResolver`/`DnsClientReverseDnsResolver` for the PTR lookup; the forward check reuses `ISpfDnsResolver.ResolveAAsync`/`ResolveAaaaAsync` rather than introducing a duplicate abstraction. |
+| FR-LEGIT-4 | Combine all of the above — cumulative aligned-pass ratio, current live SPF result, current DKIM staleness, reverse-DNS presence, forward-confirmation, and an explicit admin allowlist match — into one overall legitimacy verdict: **Verified**, **Likely legitimate**, **Unverified**, or **Suspicious**. The exact rule set is a deliberately conservative, documented heuristic (not a third-party reputation/threat-intelligence lookup, which this system has no access to) — see the XML-doc on `SenderLegitimacyEvaluator` for the full rationale. | `SenderLegitimacyEvaluator.Evaluate` (`src/DmarcAnalyzer.Core/Legitimacy/`), pure and independently unit-tested against 15 scenarios with zero DB/DNS dependency. |
+| FR-LEGIT-5 | The domain-detail page presents a dedicated **sender legitimacy** table — one row per source IP ever seen for the domain, independent of the record time-window filter — alongside the existing per-record table, which itself now also carries the same legitimacy verdict per record. | `Pages/Dashboard/DomainDetail.cshtml`, `DomainDetailModel.Senders`. |
+| FR-LEGIT-6 | Both the sender-legitimacy table and the per-record table can be filtered by legitimacy level, SPF result, DKIM result, disposition, and a free-text search (source IP, reverse-DNS hostname, or reporting org) — so an administrator can isolate exactly the non-legitimate senders without scanning the full list. | `DomainDetailModel` query-string-bound filter properties (`LegitimacyFilter`, `SpfFilter`, `DkimFilter`, `DispositionFilter`, `Search`), applied server-side. |
+| FR-LEGIT-7 | Every column in both tables is sortable by clicking its header (ascending/descending, with a visual indicator), without a full page reload. | `wwwroot/js/sortable-table.js` — a small dependency-free client-side sort over the already-rendered, already-filtered rows; no additional server round-trip. |
+
+### 3.6 Configuration, setup, and multi-instance support
 
 | ID | Requirement | Implementation |
 |---|---|---|
@@ -116,11 +132,15 @@ Requirements are grouped by capability area and tagged with an ID for traceabili
 | FR-CFG-5 | Data retention is configurable (30–3650 days, default 400) per deployment, not hardcoded. | `Pages/Setup/Retention.cshtml`; `RetentionSettings.RetentionDays`. |
 | FR-CFG-6 | The setup-wizard pages remain directly reachable after initial setup and double as the ongoing settings UI (add/remove domains and mailboxes, rotate the Graph client secret, change retention) — there is no separate, duplicated "settings" implementation. | `Pages/Settings/Index.cshtml` links directly to `Pages/Setup/*`. |
 
-### 3.6 Explicitly out of scope
+### 3.7 Explicitly out of scope
 
 The following are intentional non-goals of the current implementation, called out so they are not
 mistaken for defects:
 
+- **Sender legitimacy scoring is a heuristic, not threat intelligence** — `SenderLegitimacyEvaluator`
+  (§3.5) combines signals this system can compute for itself (report history, live SPF/DKIM,
+  reverse DNS). It has no access to, and does not call out to, any third-party IP/domain reputation
+  or threat-intelligence service. "Suspicious" means "worth an administrator's attention," not "confirmed malicious."
 - **RUF (forensic report) content parsing** — attachments are recognized but not parsed; only RUA
   (aggregate) reports drive the dashboard and analysis.
 - **SPF macro expansion** (RFC 7208 §7) — `%{i}`-style macros in `exists`/`include`/`redirect`
@@ -156,7 +176,7 @@ flowchart TB
     end
     Graph["Microsoft Graph API"]
     EXO["Exchange Online<br/>shared mailboxes"]
-    DNS["Public DNS<br/>(SPF TXT / DKIM selector TXT)"]
+    DNS["Public DNS<br/>(SPF TXT / DKIM selector TXT / reverse PTR)"]
 
     Web -- EF Core, Managed Identity --> SQL
     Poll -- EF Core, Managed Identity --> SQL
@@ -173,7 +193,7 @@ flowchart TB
 
 | Project | Responsibility | External dependencies |
 |---|---|---|
-| `DmarcAnalyzer.Core` | RFC 7489 XML parsing, RFC 7208 SPF evaluation, DKIM selector checking, verified-sender classification, entity definitions, DI-facing abstractions (`ISpfDnsResolver`, `IDkimDnsResolver`, `IGraphMailboxClient`, `ISecretStore`, `ISetupStateService`, `IVerifiedSenderClassifier`). | **None** — no EF Core, Graph SDK, or Azure SDK reference. This is what makes it fully unit-testable offline. |
+| `DmarcAnalyzer.Core` | RFC 7489 XML parsing, RFC 7208 SPF evaluation, DKIM selector checking, sender-legitimacy scoring, entity definitions, DI-facing abstractions (`ISpfDnsResolver`, `IDkimDnsResolver`, `IReverseDnsResolver`, `IGraphMailboxClient`, `ISecretStore`, `ISetupStateService`). | **None** — no EF Core, Graph SDK, or Azure SDK reference. This is what makes it fully unit-testable offline. |
 | `DmarcAnalyzer.Infrastructure` | EF Core `DbContext` + configurations + migrations, Graph client (`Microsoft.Graph` SDK v6), Key Vault client (`Azure.Security.KeyVault.Secrets`), DNS resolution (`DnsClient.NET`), the two background services, the ingestion pipeline. | EF Core SqlServer, Microsoft.Graph, Azure.Identity, Azure.Security.KeyVault.Secrets, DnsClient. |
 | `DmarcAnalyzer.Web` | ASP.NET Core 8 Razor Pages host: setup wizard, dashboard, settings, chart-data minimal API, DI composition root (`Program.cs`). | References Infrastructure + Core; adds `Microsoft.ApplicationInsights.AspNetCore`. |
 | `tests/DmarcAnalyzer.Tests` | xUnit tests against in-memory fakes (`FakeSpfDnsResolver`, `FakeDkimDnsResolver`, `FakeGraphMailboxClient`) and EF Core's InMemory provider. No network access required. | xunit, Microsoft.EntityFrameworkCore.InMemory. |
@@ -204,6 +224,7 @@ erDiagram
     Record ||--o| SpfEvaluationResult : "recomputed"
     DkimAuthResult ||--o| DkimSelectorCheck : "recomputed"
     Domain ||--o{ VerifiedSenderOverride : "allowlist"
+    Domain ||--o{ SenderReputation : "per source IP"
 ```
 
 | Entity (table) | Key fields | Notes |
@@ -219,11 +240,14 @@ erDiagram
 | `SpfAuthResult` / `DkimAuthResult` | FK `DmarcRecordId` (cascade) | As reported by the receiving mail server (`auth_results/spf`, `auth_results/dkim`). |
 | `SpfEvaluationResult` | 1:1 with `DmarcRecord` (cascade) | The **independently recomputed** SPF verdict — `RecomputedResult`, `MatchedMechanism`, `LookupCount`, `DiscrepancyFlag`/`Note`. |
 | `DkimSelectorCheck` | 1:1 with `DkimAuthResult` (cascade) | The **independently recomputed** DKIM selector liveness — `Status`, `RawTxtRecord`, `StaleFlag`. |
-| `VerifiedSenderOverride` | FK `DomainId` (cascade) | Admin-curated allowlist entry (CIDR and/or org-name pattern) contributing to the "verified sender" badge alongside DMARC-aligned pass. |
+| `VerifiedSenderOverride` | FK `DomainId` (cascade) | Admin-curated allowlist entry (CIDR and/or org-name pattern) — one of the inputs to `SenderLegitimacyEvaluator` (§3.5). |
+| `SenderReputation` | FK `DomainId` (cascade), unique index `(DomainId, SourceIp)` | The per-(domain, source IP) legitimacy aggregate (§3.5): `TotalVolume`, `AlignedPassVolume` (`AlignedPassRatio` is a `[NotMapped]` computed property over these two), `CurrentSpfResult`, `CurrentDkimStale`, `ReverseDnsHostname`, `ForwardConfirmed`, `IsOverrideMatch`, `LegitimacyLevel`, `FirstSeenUtc`/`LastSeenUtc`/`LastEvaluatedUtc`. Upserted — not append-only — so it always reflects current, not historical, standing. |
 
 Enumerations (`DmarcAnalyzer.Core.Entities.Enums`): `DmarcDisposition`, `DmarcAlignmentMode`,
 `DmarcPolicyResult`, `SpfScope`, `SpfResultCode`, `DkimResultCode`, `MessageProcessingStatus`,
-`AttachmentType`, `MailboxPollStatus`, `DkimSelectorStatus`.
+`AttachmentType`, `MailboxPollStatus`, `DkimSelectorStatus`, `SenderLegitimacyLevel` (`Verified` →
+`LikelyLegitimate` → `Unverified` → `Suspicious`, ordered most to least trustworthy — the ordinal
+value is used directly as the sort key for the Legitimacy column in the UI).
 
 ### 4.3 Interface design
 
@@ -233,7 +257,7 @@ Enumerations (`DmarcAnalyzer.Core.Entities.Enums`): `DmarcDisposition`, `DmarcAl
 |---|---|
 | `/` | Redirects to `/Dashboard`. |
 | `/Dashboard` | Domain overview cards (30-day volume, pass rate, last report). |
-| `/Dashboard/DomainDetail?domainId=&Days=&UnverifiedOnly=` | Per-domain trend chart + filterable record table. |
+| `/Dashboard/DomainDetail?domainId=&Days=&LegitimacyFilter=&SpfFilter=&DkimFilter=&DispositionFilter=&Search=` | Per-domain trend chart, sender-legitimacy table, and per-record table — both tables filterable by the query-string parameters shown and independently sortable client-side (§3.5, FR-LEGIT-5–7). |
 | `/Settings` | Hub linking to all configuration areas below. |
 | `/Settings/IngestionStatus` | Per-mailbox poll status/error, retention job status, recent processing failures. |
 | `/Setup/Welcome`, `/Setup/GraphConnection`, `/Setup/Domains`, `/Setup/Mailboxes`, `/Setup/Retention`, `/Setup/Review` | First-run wizard; also the ongoing settings pages for these areas (see FR-CFG-6). |
@@ -263,6 +287,8 @@ sequenceDiagram
     participant Pipe as DmarcReportIngestionPipeline
     participant SPF as SpfEvaluator
     participant DKIM as DkimSelectorChecker
+    participant Rev as IReverseDnsResolver
+    participant Score as SenderLegitimacyEvaluator
     participant DB as Azure SQL
 
     Timer->>Poll: tick
@@ -280,8 +306,14 @@ sequenceDiagram
                 SPF-->>Pipe: recomputed result (+ discrepancy vs. report)
                 Pipe->>DKIM: CheckAsync(domain, selector)
                 DKIM-->>Pipe: selector status (+ stale vs. report)
+                Pipe->>Rev: GetPtrHostnameAsync(sourceIp)
+                Rev-->>Pipe: PTR hostname (or none)
+                Pipe->>SPF: ResolveA/AaaaAsync(ptrHostname) [forward confirmation]
+                Pipe->>DB: upsert SenderReputation volume/current-standing
+                Pipe->>Score: Evaluate(signals)
+                Score-->>Pipe: SenderLegitimacyLevel
             end
-            Pipe->>DB: persist SpfEvaluationResult / DkimSelectorCheck
+            Pipe->>DB: persist SpfEvaluationResult / DkimSelectorCheck / SenderReputation
             Poll->>DB: record ProcessedMessage (Success/Failed)
         end
         Poll->>DB: update Mailbox.DeltaLink/LastPolledUtc/LastPollStatus
@@ -320,6 +352,7 @@ resource group for a new organization without name collisions (supports G-5/FR-C
 | NFR-PERF-2 | The SPF/DKIM lookup limit (10, per RFC 7208) bounds the DNS work per record to a small, fixed number of queries. |
 | NFR-PERF-3 | Retention purge runs in batches of 500 rows per delete statement (`RetentionPurgeService`) to avoid a single long-running transaction against the serverless SQL tier. |
 | NFR-PERF-4 | The Azure SQL tier auto-pauses after 60 minutes of inactivity (cost control); the first request after a pause incurs a resume latency, which is an accepted tradeoff for a low-traffic internal tool. |
+| NFR-PERF-5 | Sender-legitimacy scoring adds up to two DNS lookups per record (a PTR lookup, plus a forward A/AAAA lookup only when the PTR resolves) on top of the existing SPF/DKIM lookups — bounded per-record, not per-poll, so it scales with report volume the same way the existing SPF/DKIM checks already do. A within-report cache (keyed by source IP) avoids repeating the same sender's DNS work twice when one report lists it more than once. |
 
 ### 5.2 Security requirements
 
@@ -330,15 +363,16 @@ resource group for a new organization without name collisions (supports G-5/FR-C
 | NFR-SEC-3 | GitHub Actions authenticates to Azure via OIDC federated credentials; no long-lived Azure secret is stored as a GitHub secret. |
 | NFR-SEC-4 | The Graph application permission (`Mail.Read`) is tenant-wide by default; the system documents (does not itself automate) scoping it to only the configured shared mailboxes via an Exchange Online Application Access Policy — see `docs/exchange-application-access-policy.md`. |
 | NFR-SEC-5 | **Gap, accepted for the current scope**: the Web App itself has no authentication/authorization layer — anyone who can reach the deployed URL has full read/write access to the dashboard and all settings, including the ability to rotate the Graph client secret and add/remove monitored domains and mailboxes. This is an explicit, documented limitation, not an oversight; deployments are expected to restrict network reachability (e.g., Azure Front Door with auth, VNet integration + private endpoint, or an App Service authentication provider) at the infrastructure layer if broader-than-trusted-network exposure is required. This is the single most consequential gap between "internal tool for a trusted network" and "safe to expose publicly," and should be the first extension considered before any deployment reachable from the open internet. |
-| NFR-SEC-6 | Raw report/email content is not stored (see [§3.6](#36-explicitly-out-of-scope)), limiting the blast radius of a database compromise to metadata (source IPs, volumes, org names) rather than message content. |
+| NFR-SEC-6 | Raw report/email content is not stored (see [§3.7](#37-explicitly-out-of-scope)), limiting the blast radius of a database compromise to metadata (source IPs, volumes, org names) rather than message content. |
 
 ### 5.3 Usability requirements
 
 | ID | Requirement |
 |---|---|
 | NFR-USE-1 | A fresh deployment is unusable until first-run setup is complete, and is redirected there automatically rather than presenting a broken/empty dashboard. |
-| NFR-USE-2 | The dashboard visually distinguishes "verified" vs. "unverified" senders and surfaces the two independent-verification signals (SPF record drift, stale DKIM selector) as inline badges directly in the record table, not buried in a separate report. |
+| NFR-USE-2 | The dashboard surfaces a four-tier legitimacy badge (Verified/Likely legitimate/Unverified/Suspicious, §3.5) plus the two independent-verification signals (SPF record drift, stale DKIM selector) as inline badges directly in the record and sender-legitimacy tables, not buried in a separate report. |
 | NFR-USE-3 | The UI style is a self-contained, brand-neutral dashboard aesthetic (teal/slate palette, card-based domain overview, Chart.js trend visualization) modeled loosely on commercial DMARC dashboards (dmarcian-style), implemented with vendored Bootstrap + Chart.js — no CDN dependency at runtime. |
+| NFR-USE-4 | Finding non-legitimate senders does not require scanning the full record list: the legitimacy filter (FR-LEGIT-6) isolates them directly, and every column remains sortable (FR-LEGIT-7) for ad-hoc investigation without a page reload. |
 
 ### 5.4 Reliability requirements
 
@@ -360,7 +394,7 @@ resource group for a new organization without name collisions (supports G-5/FR-C
 This section records what has actually been verified against the implementation, as evidence for
 the acceptance criteria in [§6.1](#61-acceptance-criteria).
 
-- **Automated test suite**: 41 xUnit tests, all passing (`dotnet test`), covering:
+- **Automated test suite**: 62 xUnit tests, all passing (`dotnet test`), covering:
   - `SpfEvaluatorTests` (18 tests): CIDR boundary correctness (ip4/ip6), all four `all`-qualifier
     outcomes, two-level nested `include` with correct non-short-circuit fallthrough, an `include`
     target with no record, the `redirect` modifier, `a`/`mx` with and without explicit
@@ -374,12 +408,26 @@ the acceptance criteria in [§6.1](#61-acceptance-criteria).
     attachment-extraction equivalence.
   - `MailboxPollingServiceTests` (2 tests): a message is not reprocessed on a second poll; one
     malformed message does not block a subsequent valid one in the same batch.
+  - `SenderLegitimacyEvaluatorTests` (15 tests): the override-match short-circuit, the Verified
+    threshold (including the exact boundary value), historical-pass-ratio-vs-live-SPF drift
+    dropping a sender out of Verified, DKIM staleness doing the same, the LikelyLegitimate paths
+    (moderate ratio / live SPF pass alone / forward-confirmation alone), Suspicious vs. Unverified
+    hinging on reverse-DNS presence, and every non-`Pass` SPF result failing to reach Verified.
+  - `SenderReputationAggregationTests` (6 tests): a new source IP creates a correctly-aggregated
+    row; volume accumulates correctly across two separate messages for the same sender; a
+    consistently-passing sender with a valid DKIM key scores Verified end-to-end through the real
+    pipeline; a failing sender with no reverse DNS scores Suspicious; the same sender is upgraded
+    to LikelyLegitimate once a forward-confirmed PTR is introduced; an admin override forces
+    Verified regardless of SPF result.
 - **Infrastructure validation**: `infra/main.bicep` compiles and lints cleanly with the Bicep CLI
   (0 errors, 0 warnings) — all 5 modules and the Key Vault role assignment resolve correctly.
 - **End-to-end UI verification**: the running application (seeded with representative sample data,
   not a live Azure/Graph tenant) was exercised via a headless-browser pass covering the dashboard,
-  domain-detail page (including the discrepancy/stale badges), settings hub, domains/mailboxes
-  configuration, ingestion status, and setup wizard — see the screenshots in `README.md`.
+  domain-detail page (sender-legitimacy table, per-record legitimacy badges, discrepancy/stale
+  badges, and — interactively — clicking a column header to confirm client-side sorting and
+  applying the legitimacy filter to confirm both tables narrow correctly), settings hub,
+  domains/mailboxes configuration, ingestion status, and setup wizard — see the screenshots in
+  `README.md`.
 - **Workflow syntax**: both GitHub Actions workflow files were parsed and validated as well-formed
   YAML.
 
@@ -399,6 +447,8 @@ tenant, and an actual CI/CD run of `deploy.yml` end-to-end. These are called out
 | Reliability | A single bad message does not abort a poll cycle. | Met — `MailboxPollingServiceTests.PollOnceAsync_OneFailingMessage_DoesNotBlockTheRestOfTheBatch`. |
 | Reliability | A poll/purge cycle failure is logged, not fatal to the process. | Met by construction (`try/catch` around each `BackgroundService` loop body) — not covered by an automated test (would require simulating a hosted-service crash), flagged as a documentation-only acceptance item. |
 | Portability | The Bicep template contains no hardcoded tenant-specific value. | Met — verified by inspection of `infra/main.parameters.json` and all `infra/*.bicep` files. |
+| Functional | Filtering the domain-detail page by legitimacy level narrows both the sender-legitimacy table and the per-record table to only matching rows. | Met — verified interactively via headless browser (filter applied to `Suspicious`, both tables collapsed correctly; see README screenshots) and by the server-side filter logic in `DomainDetailModel.OnGetAsync`. |
+| Functional | Every table column responds to a header click by sorting the currently-visible rows, toggling direction on repeated clicks, without a server round-trip. | Met — verified interactively via headless browser (see README screenshots); `sortable-table.js` operates purely client-side over already-rendered DOM rows. |
 
 ## 7. Appendix
 
@@ -416,6 +466,9 @@ tenant, and an actual CI/CD run of `deploy.yml` end-to-end. These are called out
 | **Discrepancy** (this system's term) | A record whose live-recomputed SPF result disagrees with what the aggregate report itself claimed for that source IP. |
 | **Stale selector** (this system's term) | A DKIM selector the report recorded as passing, which no longer resolves or has been revoked in DNS today. |
 | **Application Access Policy** | An Exchange Online control restricting which mailboxes a given Graph app registration's application permissions can reach. |
+| **Sender legitimacy** (this system's term) | The overall Verified/Likely legitimate/Unverified/Suspicious verdict `SenderLegitimacyEvaluator` computes per (domain, source IP) — see §3.5. Distinct from a single record's own SPF/DKIM pass/fail: it's a cumulative, continuously-updated assessment of that sender specifically. |
+| **PTR record / reverse DNS** | A DNS record mapping an IP address back to a hostname (the inverse of the usual A/AAAA lookup), queried via the special `in-addr.arpa`/`ip6.arpa` zones. |
+| **FCrDNS** | Forward-Confirmed reverse DNS — a PTR lookup's hostname result is considered confirmed only if that hostname's own A/AAAA records resolve back to the original IP. Used here as one signal (not a hard requirement) toward the Verified/Likely legitimate tiers. |
 
 ### 7.2 Reference documents
 
@@ -445,3 +498,4 @@ automated test suite before merge, not merely style issues:
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-08-10 | Initial specification, describing the system as of commit `844b4ac`. |
+| 1.1 | 2026-08-10 | Added §3.5 Sender legitimacy scoring (FR-LEGIT-1–7): the `SenderReputation` aggregate, `SenderLegitimacyEvaluator` heuristic, reverse-DNS/FCrDNS check, the domain-detail page's sender-legitimacy table, and cross-cutting filter/sort capability on both detail tables. Renumbered the former §3.5/§3.6 to §3.6/§3.7 accordingly. Retired the standalone `IVerifiedSenderClassifier` abstraction and its two-state Verified/Unverified badge — superseded by the four-tier legitimacy verdict everywhere it was used; its override-matching logic survives as `SenderOverrideMatcher`. Updated data model, architecture/sequence diagrams, NFRs, and verification evidence (41 → 62 tests) accordingly. |
