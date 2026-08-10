@@ -90,32 +90,32 @@ public class SpfEvaluator(ISpfDnsResolver dnsResolver)
                     break;
 
                 case "include":
-                {
-                    if (string.IsNullOrEmpty(value))
                     {
-                        return (SpfResultCode.PermError, null, recordText);
-                    }
-
-                    var (includeResult, _, _) = await EvaluateDomainAsync(value, checkedIp, lookupCount, cancellationToken);
-                    switch (includeResult)
-                    {
-                        case SpfResultCode.Pass:
-                            matched = true;
-                            break;
-                        case SpfResultCode.None or SpfResultCode.PermError:
-                            // Per RFC 7208 §5.2: an "include" target with no record, or one that itself
-                            // PermErrors, is a PermError for the outer evaluation.
+                        if (string.IsNullOrEmpty(value))
+                        {
                             return (SpfResultCode.PermError, null, recordText);
-                        case SpfResultCode.TempError:
-                            return (SpfResultCode.TempError, null, recordText);
-                        default:
-                            // Fail/SoftFail/Neutral from the included domain: falls through, not a match.
-                            matched = false;
-                            break;
-                    }
+                        }
 
-                    break;
-                }
+                        var (includeResult, _, _) = await EvaluateDomainAsync(value, checkedIp, lookupCount, cancellationToken);
+                        switch (includeResult)
+                        {
+                            case SpfResultCode.Pass:
+                                matched = true;
+                                break;
+                            case SpfResultCode.None or SpfResultCode.PermError:
+                                // Per RFC 7208 §5.2: an "include" target with no record, or one that itself
+                                // PermErrors, is a PermError for the outer evaluation.
+                                return (SpfResultCode.PermError, null, recordText);
+                            case SpfResultCode.TempError:
+                                return (SpfResultCode.TempError, null, recordText);
+                            default:
+                                // Fail/SoftFail/Neutral from the included domain: falls through, not a match.
+                                matched = false;
+                                break;
+                        }
+
+                        break;
+                    }
 
                 case "ptr":
                     // Deprecated by RFC 7208 §5.5 and intentionally unsupported.

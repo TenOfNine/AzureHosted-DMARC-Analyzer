@@ -1,0 +1,106 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+  AZURE_SQL_SERVER_NAME: ${{ vars.AZURE_SQL_SERVER_NAME }}
+  AZURE_SQL_DATABASE_NAME: ${{ vars.AZURE_SQL_DATABASE_NAME || 'DmarcAnalyzer' }}
+
+jobs:
+  infra:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    outputs:
+      webAppName: ${{ steps.deploy.outputs.webAppName }}
+      sqlServerFqdn: ${{ steps.deploy.outputs.sqlServerFqdn }}
+      sqlDatabaseName: ${{ steps.deploy.outputs.sqlDatabaseName }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infrastructure (Bicep)
+        id: deploy
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+          template: infra/main.bicep
+          parameters: infra/main.parameters.json
+          deploymentName: dmarc-analyzer-${{ github.run_number }}
+
+  migrate-and-deploy:
+    needs: infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Grant Web App managed identity database access
+        run: >
+          dotnet run --project tools/GrantSqlAccess -c Release --
+          "${{ needs.infra.outputs.sqlServerFqdn }}"
+          "${{ env.AZURE_SQL_DATABASE_NAME }}"
+          "${{ needs.infra.outputs.webAppName }}"
+          "${{ github.workspace }}/infra/post-deploy-sql-grant.sql.tmpl"
+
+      - name: Build EF Core migrations bundle
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.*
+          dotnet ef migrations bundle \
+            --project src/DmarcAnalyzer.Infrastructure \
+            --startup-project src/DmarcAnalyzer.Infrastructure \
+            --self-contained -r linux-x64 \
+            --output /tmp/efbundle
+
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL_SERVER_FQDN="${{ needs.infra.outputs.sqlServerFqdn }}"
+          SQL_DATABASE_NAME="${{ needs.infra.outputs.sqlDatabaseName }}"
+          # "Active Directory Default" (not "Active Directory Access Token" — that mode only accepts a
+          # token via the SqlConnection.AccessToken *property*, which a connection string can't express)
+          # resolves credentials through Microsoft.Data.SqlClient's built-in Azure.Identity integration,
+          # which picks up the OIDC federated identity azure/login@v2 already established in this job.
+          CONNECTION_STRING="Server=tcp:${SQL_SERVER_FQDN},1433;Database=${SQL_DATABASE_NAME};Authentication=Active Directory Default;Encrypt=True;"
+          /tmp/efbundle --connection "${CONNECTION_STRING}"
+
+      - name: Publish
+        run: dotnet publish src/DmarcAnalyzer.Web -c Release -o ./publish
+
+      - name: Zip artifact
+        run: (cd publish && zip -r ../publish.zip .)
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ needs.infra.outputs.webAppName }}
+          package: publish.zip
