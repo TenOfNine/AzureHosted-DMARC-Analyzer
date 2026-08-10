@@ -9,6 +9,7 @@ using DmarcAnalyzer.Infrastructure.Ingestion;
 using DmarcAnalyzer.Infrastructure.Retention;
 using DmarcAnalyzer.Infrastructure.Secrets;
 using DmarcAnalyzer.Infrastructure.Setup;
+using DmarcAnalyzer.Web.Api;
 using DmarcAnalyzer.Web.Infrastructure;
 using DnsClient;
 using Microsoft.EntityFrameworkCore;
@@ -65,5 +66,6 @@ app.UseMiddleware<SetupGateMiddleware>();
 app.UseAuthorization();
 
 app.MapRazorPages();
+app.MapChartDataEndpoints();
 
 app.Run();

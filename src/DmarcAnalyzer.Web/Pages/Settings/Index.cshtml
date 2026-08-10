@@ -1,0 +1,29 @@
+@page
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<h1 class="h4 mb-4">Settings</h1>
+
+<div class="list-group" style="max-width: 480px;">
+    <a class="list-group-item list-group-item-action" asp-page="/Setup/GraphConnection">
+        <div class="fw-semibold">Graph connection</div>
+        <div class="text-muted small">Entra ID app registration used to read shared mailboxes.</div>
+    </a>
+    <a class="list-group-item list-group-item-action" asp-page="/Setup/Domains">
+        <div class="fw-semibold">Domains</div>
+        <div class="text-muted small">Sender domains being monitored.</div>
+    </a>
+    <a class="list-group-item list-group-item-action" asp-page="/Setup/Mailboxes">
+        <div class="fw-semibold">Shared mailboxes</div>
+        <div class="text-muted small">Mailboxes polled for RUA/RUF reports, and which domains each serves.</div>
+    </a>
+    <a class="list-group-item list-group-item-action" asp-page="/Setup/Retention">
+        <div class="fw-semibold">Data retention</div>
+        <div class="text-muted small">How long report data is kept before automatic purge.</div>
+    </a>
+    <a class="list-group-item list-group-item-action" asp-page="/Settings/IngestionStatus">
+        <div class="fw-semibold">Ingestion status</div>
+        <div class="text-muted small">Per-mailbox poll status and recent processing errors.</div>
+    </a>
+</div>

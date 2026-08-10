@@ -1,0 +1,97 @@
+@page
+@using DmarcAnalyzer.Core.Entities
+@model DmarcAnalyzer.Web.Pages.Settings.IngestionStatusModel
+@{
+    ViewData["Title"] = "Ingestion Status";
+}
+
+<a asp-page="Index" class="text-muted small">&larr; Settings</a>
+<h1 class="h4 mb-4">Ingestion status</h1>
+
+<h2 class="h6">Mailboxes</h2>
+<div class="table-responsive mb-4">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Mailbox</th>
+                <th>Folder</th>
+                <th>Last polled</th>
+                <th>Status</th>
+                <th>Last error</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.Mailboxes.Count == 0)
+            {
+                <tr><td colspan="5" class="text-muted text-center py-3">No mailboxes configured.</td></tr>
+            }
+            @foreach (var mailbox in Model.Mailboxes)
+            {
+                <tr>
+                    <td>@mailbox.MailboxUpn @(mailbox.IsActive ? "" : "(inactive)")</td>
+                    <td>@mailbox.MailFolder</td>
+                    <td>@(mailbox.LastPolledUtc?.ToString("yyyy-MM-dd HH:mm") ?? "never")</td>
+                    <td>
+                        @switch (mailbox.LastPollStatus)
+                        {
+                            case MailboxPollStatus.Ok:
+                                <span class="badge badge-verified">OK</span>
+                                break;
+                            case MailboxPollStatus.Error:
+                                <span class="badge badge-unverified">Error</span>
+                                break;
+                            default:
+                                <span class="badge bg-secondary">Never polled</span>
+                                break;
+                        }
+                    </td>
+                    <td class="text-muted small">@mailbox.LastPollError</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<h2 class="h6">Retention</h2>
+<p class="text-muted small mb-4">
+    @if (Model.Retention is { } retention)
+    {
+        <text>
+            Retention window: @retention.RetentionDays days. Last purge:
+            @(retention.LastPurgeRunUtc?.ToString("yyyy-MM-dd HH:mm") ?? "never run") (@retention.LastPurgeRowsDeleted row(s) deleted).
+        </text>
+    }
+    else
+    {
+        <text>Retention is not configured yet.</text>
+    }
+</p>
+
+<h2 class="h6">Recent processing failures</h2>
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Processed</th>
+                <th>Mailbox</th>
+                <th>Message ID</th>
+                <th>Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.RecentFailures.Count == 0)
+            {
+                <tr><td colspan="4" class="text-muted text-center py-3">No recent failures.</td></tr>
+            }
+            @foreach (var failure in Model.RecentFailures)
+            {
+                <tr>
+                    <td>@failure.ProcessedUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@failure.Mailbox.MailboxUpn</td>
+                    <td class="text-muted small">@failure.GraphMessageId</td>
+                    <td class="text-muted small">@failure.FailureReason</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

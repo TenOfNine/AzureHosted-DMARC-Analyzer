@@ -1,0 +1,63 @@
+@page
+@model DmarcAnalyzer.Web.Pages.Dashboard.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 mb-0">Domains</h1>
+    <a class="btn btn-outline-secondary btn-sm" asp-page="/Settings/Index">Settings</a>
+</div>
+
+@if (Model.DomainSummaries.Count == 0)
+{
+    <div class="alert alert-info">
+        No domains are configured yet. Add one in <a asp-page="/Setup/Domains">Settings &rarr; Domains</a>.
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var domain in Model.DomainSummaries)
+        {
+            <div class="col-md-6 col-lg-4">
+                <a class="text-decoration-none text-reset" asp-page="DomainDetail" asp-route-domainId="@domain.DomainId">
+                    <div class="stat-card h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="fw-semibold">@domain.DomainName</div>
+                            @if (domain.PassRatePercent is { } rate)
+                            {
+                                var badgeClass = rate >= 95 ? "badge-verified" : "badge-unverified";
+                                <span class="badge @badgeClass">@rate.ToString("0.#")% aligned</span>
+                            }
+                        </div>
+
+                        @if (domain.TotalVolume30d > 0)
+                        {
+                            <div class="stat-value">@domain.TotalVolume30d.ToString("N0")</div>
+                            <div class="text-muted small mb-2">messages, last 30 days</div>
+                            <div class="progress" style="height: 6px;" role="progressbar" aria-valuenow="@domain.PassRatePercent" aria-valuemin="0" aria-valuemax="100">
+                                <div class="progress-bar bg-success" style="width: @(domain.PassRatePercent ?? 0)%;"></div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-muted small">No reports received in the last 30 days.</div>
+                        }
+
+                        <div class="text-muted small mt-2">
+                            @if (domain.LastReportUtc is { } last)
+                            {
+                                <text>Last report: @last.ToString("yyyy-MM-dd")</text>
+                            }
+                            else
+                            {
+                                <text>No reports received yet.</text>
+                            }
+                        </div>
+                    </div>
+                </a>
+            </div>
+        }
+    </div>
+}
