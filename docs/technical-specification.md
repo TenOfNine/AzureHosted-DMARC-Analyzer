@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 1.1 |
+| **Document version** | 1.2 |
 | **Date written** | 2026-08-10 (last updated 2026-08-10 — see [§7.4 Change log](#74-change-log)) |
 | **Document status** | Final — describes the as-built system on `main` plus this update's pending pull request |
 | **Repository** | `TenOfNine/AzureHosted-DMARC-Analyzer` |
@@ -340,6 +340,8 @@ resource group for a new organization without name collisions (supports G-5/FR-C
 | Workflow | Trigger | Steps |
 |---|---|---|
 | `.github/workflows/ci.yml` | Pull request → `main`, push → `main` | `dotnet restore` → `dotnet build -c Release` → `dotnet format --verify-no-changes` → `dotnet test` (with coverage collection) → upload test results artifact. No Azure credentials used or needed. |
+| `.github/workflows/codeql.yml` | Pull request → `main`, push → `main`, weekly schedule | `github/codeql-action` static analysis for C#, uploaded to the repository's Security tab. |
+| `.github/workflows/dependency-review.yml` | Pull request → `main` | `actions/dependency-review-action` fails the check on newly introduced dependencies with high-severity vulnerability advisories. |
 | `.github/workflows/deploy.yml` | `workflow_run` after CI succeeds on `main`, or manual `workflow_dispatch` | `azure/login` via **OIDC federated credentials** (no stored client secret) → Bicep deploy (`azure/arm-deploy`) → grant the Web App's managed identity DB access (`tools/GrantSqlAccess`, using `Authentication=Active Directory Default`) → build + apply an EF Core migrations bundle → `dotnet publish` → `azure/webapps-deploy`. |
 
 ## 5. Non-Functional Requirements
@@ -499,3 +501,4 @@ automated test suite before merge, not merely style issues:
 |---|---|---|
 | 1.0 | 2026-08-10 | Initial specification, describing the system as of commit `844b4ac`. |
 | 1.1 | 2026-08-10 | Added §3.5 Sender legitimacy scoring (FR-LEGIT-1–7): the `SenderReputation` aggregate, `SenderLegitimacyEvaluator` heuristic, reverse-DNS/FCrDNS check, the domain-detail page's sender-legitimacy table, and cross-cutting filter/sort capability on both detail tables. Renumbered the former §3.5/§3.6 to §3.6/§3.7 accordingly. Retired the standalone `IVerifiedSenderClassifier` abstraction and its two-state Verified/Unverified badge — superseded by the four-tier legitimacy verdict everywhere it was used; its override-matching logic survives as `SenderOverrideMatcher`. Updated data model, architecture/sequence diagrams, NFRs, and verification evidence (41 → 62 tests) accordingly. |
+| 1.2 | 2026-08-10 | Relicensed the project under the PolyForm Noncommercial License 1.0.0 (`LICENSE`) — noncommercial use, modification, and self-hosting permitted; commercial resale requires a separate agreement. Added two CI/CD checks (§4.6): `codeql.yml` (CodeQL static analysis for C#, on every PR/push plus a weekly schedule) and `dependency-review.yml` (fails PRs introducing high-severity vulnerable dependencies). Added a README Testing section documenting current pass/fail results and status badges. |
