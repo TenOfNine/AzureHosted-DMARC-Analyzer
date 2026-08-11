@@ -1,0 +1,13 @@
+title = "gitleaks config for AzureHosted-DMARC-Analyzer"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secret values that trip entropy-based rules"
+regexes = [
+  # Azure built-in RBAC role definition ID for "Key Vault Secrets Officer" (infra/main.bicep) — a
+  # public, Microsoft-documented constant (see learn.microsoft.com/azure/role-based-access-control/
+  # built-in-roles), not a secret. Its hex/GUID shape trips the generic-api-key entropy rule.
+  '''b86a8fe4-44ce-4948-aee5-eccb2c155cd7''',
+]

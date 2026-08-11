@@ -147,9 +147,16 @@ automatically until all of it is complete.
   both are real, not theoretical, attack surface.
 - **No password-based credentials anywhere**: Graph access is app-only OAuth, SQL access is Azure
   AD-only (managed identity), Key Vault access is managed identity via RBAC, and GitHub Actions
-  authenticates to Azure via OIDC federated credentials — see NFR-SEC-1–9 in
+  authenticates to Azure via OIDC federated credentials.
+- **Auditable by default**: every Bicep-deployed resource is tagged, and Web App/Key Vault/SQL
+  audit logs are routed to the deployment's Log Analytics workspace automatically; a
+  [`secret-scan.yml`](.github/workflows/secret-scan.yml) workflow scans every push/PR with
+  gitleaks. The architecture was reviewed against the
+  [Microsoft Cloud Security Benchmark](https://learn.microsoft.com/en-us/security/benchmark/azure/overview) —
+  see NFR-SEC-1–13 and §5.2.1 in
   [`docs/technical-specification.md`](docs/technical-specification.md#5-non-functional-requirements)
-  for the full list.
+  for the full list, including the larger-tradeoff controls (private endpoints, customer-managed
+  keys, Defender for Cloud) that are documented but deliberately not applied by default.
 
 ## Testing
 

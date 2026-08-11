@@ -156,7 +156,10 @@ Push to `main` (after CI passes) or run the **Deploy** workflow manually
 (`workflow_dispatch`) from the Actions tab. This:
 
 1. Deploys `infra/main.bicep` (App Service with Easy Auth sign-in gate, Azure SQL, Key Vault,
-   Application Insights).
+   Application Insights). Every resource is tagged (`application`/`environment`/`managedBy`) and
+   the Web App's HTTP/console logs, Key Vault audit events, and SQL security audit events are all
+   routed to the deployment's Log Analytics workspace automatically — see §5.2.1 of the technical
+   specification for the full Microsoft Cloud Security Benchmark alignment review.
 2. Grants the Web App's managed identity database access (`tools/GrantSqlAccess`).
 3. Builds and applies EF Core migrations (`dotnet ef migrations bundle`).
 4. Publishes and deploys the app to the Web App.
