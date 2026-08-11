@@ -10,6 +10,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
+    <!-- Microsoft.Data.SqlClient 7.x moved Azure AD auth (Authentication=Active Directory Default,
+         used below to connect via the OIDC-federated managed identity) out of the core package into
+         this companion package; without it, AAD connection strings fail at runtime. -->
+    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
   </ItemGroup>
 
 </Project>
