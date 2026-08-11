@@ -26,10 +26,10 @@ jobs:
       sqlServerFqdn: ${{ steps.deploy.outputs.sqlServerFqdn }}
       sqlDatabaseName: ${{ steps.deploy.outputs.sqlDatabaseName }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Azure login (OIDC)
-        uses: azure/login@v3
+        uses: azure/login@d54469830ea7d513b7371e02a077c3ee5cb7b112 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -44,7 +44,7 @@ jobs:
       # sign-in authentication" in docs/deployment.md.
       - name: Deploy infrastructure (Bicep)
         id: deploy
-        uses: azure/arm-deploy@v2
+        uses: azure/arm-deploy@a1361c2c2cd398621955b16ca32e01c65ea340f5 # v2.0.0
         with:
           scope: resourcegroup
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
@@ -56,15 +56,15 @@ jobs:
     needs: infra
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           global-json-file: global.json
 
       - name: Azure login (OIDC)
-        uses: azure/login@v3
+        uses: azure/login@d54469830ea7d513b7371e02a077c3ee5cb7b112 # v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -107,7 +107,7 @@ jobs:
         run: (cd publish && zip -r ../publish.zip .)
 
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
+        uses: azure/webapps-deploy@b686016b4de8820a23519503685d8d03fbfa03a6 # v3
         with:
           app-name: ${{ needs.infra.outputs.webAppName }}
           package: publish.zip

@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 1.6 |
+| **Document version** | 1.7 |
 | **Date written** | 2026-08-10 (last updated 2026-08-11 — see [§7.4 Change log](#74-change-log)) |
 | **Document status** | Final — describes the as-built system on `main` plus this update's pending pull request |
 | **Repository** | `TenOfNine/AzureHosted-DMARC-Analyzer` |
@@ -397,11 +397,36 @@ dependency-review comment reports on the *dependencies introduced by that PR* (e
 a GitHub-owned action) — not on this repository itself. `scorecard.yml` is what actually assesses
 *this* repo, and is the source for the README badge.
 
-A few checks are expected to score low here, by design rather than oversight:
+Once `scorecard.yml` actually ran against this repository (it initially failed to resolve
+`ossf/scorecard-action@v2` — that action publishes only full semver tags, no floating `v2` alias;
+fixed by pinning the exact release), its real findings were reviewed and acted on:
 
-- **Token-Permissions** — every workflow in `.github/workflows/` already declares an explicit,
-  least-privilege `permissions:` block (verified during this review); this check should score well.
-- **CII Best Practices** — this is the [OpenSSF Best Practices badge](https://www.bestpractices.dev/),
+**Fixed:**
+
+- **Pinned-Dependencies** — every `uses:` reference in every workflow is now pinned to a full commit
+  SHA (with the resolved version as a trailing comment), not a floating tag — a moved/compromised
+  tag can no longer silently change what a workflow runs. Two upstream projects (`azure/login`,
+  `azure/webapps-deploy`) keep their floating major-version tag ahead of their latest numbered
+  release; the SHA pin still freezes exactly what was current at pin time regardless. NuGet
+  dependencies are now equivalently pinned via a `packages.lock.json` per project
+  (`Directory.Build.props` sets `RestorePackagesWithLockFile`), each dependency recorded with its
+  exact resolved version and content hash; `ci.yml`'s restore step uses `--locked-mode`, so a
+  dependency bump that isn't accompanied by a regenerated, committed lock file fails CI rather than
+  silently re-resolving.
+- **Dependency-Update-Tool** — `.github/dependabot.yml` opens weekly, grouped update PRs for both
+  the `nuget` and `github-actions` ecosystems (grouped to avoid a flood of individual bump PRs on a
+  solo-maintained repo).
+- **Security-Policy** — `SECURITY.md` documents how to report a vulnerability (GitHub private
+  vulnerability reporting) — found missing during this review; not something Scorecard's badge
+  focuses on specifically, but a trivial, clearly worthwhile fix once noticed.
+
+**Expected to stay low, by design or external constraint — not oversight:**
+
+- **Token-Permissions** — every workflow already declares an explicit, least-privilege
+  `permissions:` block; the one partial ding (`scorecard.yml`'s top-level `security-events: write`,
+  needed to publish SARIF) is `ossf/scorecard-action`'s own documented required permission set, not
+  a workflow we under-scoped.
+- **CII Best Practices** — the [OpenSSF Best Practices badge](https://www.bestpractices.dev/),
   earned by the project maintainer completing a self-assessment questionnaire on bestpractices.dev.
   It requires an ongoing commitment from whoever registers as the project owner and can't be
   completed on the maintainer's behalf via a pull request.
@@ -418,6 +443,24 @@ A few checks are expected to score low here, by design rather than oversight:
   container image and/or a formal release process was considered and explicitly deferred (adds
   versioning/changelog discipline with no identified consumer need today) — worth revisiting if the
   project ever needs to be distributed outside its own CI/CD pipeline.
+- **Code-Review** and **Maintained** — both are structurally low for a brand-new (created
+  2026-08-10), solo-maintained repository: every merged PR was authored *and* merged by the same
+  account, so Scorecard's "approved changesets" count is 0, and "Maintained" partly weights recent
+  *issue* activity, which a repository with no external users won't have yet. Neither is a code fix;
+  both improve naturally as the project ages and, if ever relevant, gains a second reviewer.
+
+**Left for the repository owner to enable — not achievable from a pull request:**
+
+- **Branch-Protection** — GitHub repository settings, not a committed file. Recommended (and
+  requested, conditionally, by the project owner): a `main` branch protection rule requiring the
+  `build-test`, `CodeQL`/`analyze`, `Dependency Review`, `gitleaks`, and `Scorecard`/`analysis`
+  status checks to pass before merging, **without** requiring PR review approval — the latter would
+  block the current solo-maintainer workflow entirely (GitHub does not let an author approve their
+  own PR), which is exactly the "major restriction on further development" the owner asked to
+  avoid. Status-check enforcement alone still satisfies Scorecard's check for a meaningful chunk of
+  its score and matches what already happens in practice (PRs are only merged once CI is green).
+- **Private vulnerability reporting** — `SECURITY.md` links to it; the feature itself must be
+  toggled on in Settings → Security for the link to resolve to a working report form.
 
 ### 5.3 Usability requirements
 
@@ -563,3 +606,4 @@ automated test suite before merge, not merely style issues:
 | 1.4 | 2026-08-10 | Security hardening pass: rewrote NFR-SEC-5 — the Web App is now gated behind Microsoft Entra ID sign-in via Azure App Service Authentication ("Easy Auth" v2), closing what had been the top accepted gap (no authentication layer existed at all). Added NFR-SEC-7–9: a strict per-request-nonce Content-Security-Policy and hardening headers (`SecurityHeadersMiddleware`), explicit XXE/DTD-processing prohibition in the DMARC XML parser, and a 50 MB decompression-bomb guard on zip/gzip attachment extraction. Also consolidated duplicated logic found in a dedicated review pass (`DmarcAlignment.IsAlignedPass`, `DbContext.GetOrCreateSingletonAsync`) and reworked `docs/deployment.md` with a Mermaid deployment-flow diagram. Test count 62 → 65. |
 | 1.5 | 2026-08-11 | Regenerated `docs/images/domain-detail.png` — the prior screenshot's sample data never triggered the "record changed"/"selector stale" badges the README describes next to it, even though the feature was (and still is) implemented; the new seed data exercises both. Reviewed the architecture against the Microsoft Cloud Security Benchmark (§5.2.1, new): added NFR-SEC-10–13 (resource tagging, diagnostic logging to the existing Log Analytics workspace for the Web App/Key Vault/SQL, zone-redundant SQL backups, and a gitleaks-based secret-scanning CI check) and documented — without applying — the larger-tradeoff controls (private endpoints, customer-managed keys, Defender for Cloud plans, Conditional Access) as deliberate deferrals with rationale. |
 | 1.6 | 2026-08-11 | Added `scorecard.yml` (OpenSSF Scorecard, weekly + on push to `main`) and a README badge — clarified (§5.2.2, new) that the low Token-Permissions/CII-Best-Practices/Fuzzing/Packaging/Signed-Releases scores seen in a prior PR's dependency-review comment were for the `actions/checkout` dependency, not this repository. Documented why Fuzzing, Packaging, and Signed-Releases are expected to score low here by design (no Scorecard-recognized fuzzing integration fits C#/.NET; the project deploys continuously rather than publishing versioned packages/releases) after confirming with the user that neither container packaging nor a formal release process is wanted right now. |
+| 1.7 | 2026-08-11 | Acted on `scorecard.yml`'s first real run against this repository (previously it failed outright — `ossf/scorecard-action@v2` doesn't exist, only full semver tags do; fixed separately). Every workflow's GitHub Actions are now pinned by commit SHA rather than a floating tag (Pinned-Dependencies); NuGet dependencies gained a `packages.lock.json` per project via `Directory.Build.props`, enforced in CI with `dotnet restore --locked-mode`. Added `.github/dependabot.yml` (weekly, grouped, nuget + github-actions) and `SECURITY.md` (found missing during this pass). Documented, per the two constraints the project owner set, why Branch-Protection is recommended only in its status-checks-required form (not required reviews, which would block the current solo-maintainer workflow) and left for the owner to enable in repository settings — not something a pull request can do. |
