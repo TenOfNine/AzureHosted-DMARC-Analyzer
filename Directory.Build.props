@@ -1,0 +1,10 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Generates packages.lock.json per project, pinning every transitive NuGet dependency to an
+         exact, content-hash-verified version (OpenSSF Scorecard's Pinned-Dependencies check, and
+         general supply-chain hygiene) instead of just the direct <PackageReference> version ranges. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+</Project>

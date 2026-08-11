@@ -164,6 +164,11 @@ automatically until all of it is complete.
   [`docs/technical-specification.md`](docs/technical-specification.md#522-openssf-scorecard-notes)
   for why a few Scorecard checks (Fuzzing, Packaging, Signed-Releases, CII Best Practices) score low
   here by design rather than by omission.
+- **Pinned dependencies**: every GitHub Action across all workflows is pinned by commit SHA (not a
+  floating tag), and every NuGet dependency is locked by exact version + content hash via a
+  `packages.lock.json` per project, enforced in CI (`dotnet restore --locked-mode`).
+  [`dependabot.yml`](.github/dependabot.yml) opens weekly update PRs for both. See
+  [`SECURITY.md`](SECURITY.md) to report a vulnerability.
 
 ## Testing
 
