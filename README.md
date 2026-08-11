@@ -2,6 +2,7 @@
 
 ![CI](https://github.com/TenOfNine/AzureHosted-DMARC-Analyzer/actions/workflows/ci.yml/badge.svg)
 ![CodeQL](https://github.com/TenOfNine/AzureHosted-DMARC-Analyzer/actions/workflows/codeql.yml/badge.svg)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/TenOfNine/AzureHosted-DMARC-Analyzer/badge)](https://scorecard.dev/viewer/?uri=github.com/TenOfNine/AzureHosted-DMARC-Analyzer)
 ![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
 ![.NET](https://img.shields.io/badge/.NET-8-512BD4)
 ![Tests](https://img.shields.io/badge/tests-65%20passing-brightgreen)
@@ -157,6 +158,12 @@ automatically until all of it is complete.
   [`docs/technical-specification.md`](docs/technical-specification.md#5-non-functional-requirements)
   for the full list, including the larger-tradeoff controls (private endpoints, customer-managed
   keys, Defender for Cloud) that are documented but deliberately not applied by default.
+- **OpenSSF Scorecard**: [`scorecard.yml`](.github/workflows/scorecard.yml) runs a weekly automated
+  supply-chain security assessment of this repository and publishes the badge above. Every one of
+  our own workflows already declares least-privilege `permissions:` — see §5.2.2 in
+  [`docs/technical-specification.md`](docs/technical-specification.md#522-openssf-scorecard-notes)
+  for why a few Scorecard checks (Fuzzing, Packaging, Signed-Releases, CII Best Practices) score low
+  here by design rather than by omission.
 
 ## Testing
 

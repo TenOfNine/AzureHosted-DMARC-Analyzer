@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 1.5 |
+| **Document version** | 1.6 |
 | **Date written** | 2026-08-10 (last updated 2026-08-11 — see [§7.4 Change log](#74-change-log)) |
 | **Document status** | Final — describes the as-built system on `main` plus this update's pending pull request |
 | **Repository** | `TenOfNine/AzureHosted-DMARC-Analyzer` |
@@ -387,6 +387,38 @@ A review against the [Microsoft Cloud Security Benchmark](https://learn.microsof
 | Defender for Cloud plans (App Service, SQL, Key Vault) | Subscription-level threat protection and posture recommendations. | Defender plans are enabled per-subscription, not per-resource-group, so they sit outside what a resource-group-scoped Bicep template can (or should) toggle on someone else's behalf — and they carry their own per-resource hourly cost. Documented here as a recommendation for the deploying engineer to evaluate and enable at the subscription level if desired. |
 | IM-3 (Conditional Access / MFA on the sign-in app) | Require MFA and/or a Conditional Access policy for the Easy Auth sign-in App Registration. | Conditional Access requires Entra ID P1/P2 licensing, which not every tenant has; NFR-SEC-5's Easy Auth gate is the baseline this template guarantees, and the deploying organization's own tenant-wide Conditional Access policies (if any) already apply on top of it for any app requiring sign-in — nothing in this template needs to duplicate that. |
 
+#### 5.2.2 OpenSSF Scorecard notes
+
+`scorecard.yml` runs the [OpenSSF Scorecard](https://github.com/ossf/scorecard) against this
+repository weekly and on every push to `main`, publishing results to the public Scorecard API/badge
+(appropriate since this repository is public) and to GitHub's own code-scanning dashboard. One
+clarification worth recording: a Scorecard result surfaced in a pull request's automated
+dependency-review comment reports on the *dependencies introduced by that PR* (e.g. `actions/checkout`,
+a GitHub-owned action) — not on this repository itself. `scorecard.yml` is what actually assesses
+*this* repo, and is the source for the README badge.
+
+A few checks are expected to score low here, by design rather than oversight:
+
+- **Token-Permissions** — every workflow in `.github/workflows/` already declares an explicit,
+  least-privilege `permissions:` block (verified during this review); this check should score well.
+- **CII Best Practices** — this is the [OpenSSF Best Practices badge](https://www.bestpractices.dev/),
+  earned by the project maintainer completing a self-assessment questionnaire on bestpractices.dev.
+  It requires an ongoing commitment from whoever registers as the project owner and can't be
+  completed on the maintainer's behalf via a pull request.
+- **Fuzzing** — Scorecard only recognizes a small set of specific integrations (OneFuzz, ClusterFuzzLite,
+  Go's native fuzzing, OSS-Fuzz, property-based Haskell testing). None practically fit a C#/.NET
+  project today: OneFuzz is archived, ClusterFuzzLite doesn't support C#, and OSS-Fuzz has no
+  meaningful .NET track. The DMARC XML parser's actual fuzzing-relevant attack surface (malformed
+  XML, XXE, decompression bombs) is instead covered by targeted unit tests (NFR-SEC-8/9) rather
+  than a generic fuzz harness.
+- **Packaging** and **Signed-Releases** — both assume the project publishes versioned package
+  artifacts (to a registry like npm/NuGet/a container registry) via tagged GitHub Releases. This
+  project is deployed continuously from `main` straight to Azure App Service (§4.6) rather than
+  published as a versioned package, so neither applies to its current shape. Introducing a
+  container image and/or a formal release process was considered and explicitly deferred (adds
+  versioning/changelog discipline with no identified consumer need today) — worth revisiting if the
+  project ever needs to be distributed outside its own CI/CD pipeline.
+
 ### 5.3 Usability requirements
 
 | ID | Requirement |
@@ -530,3 +562,4 @@ automated test suite before merge, not merely style issues:
 | 1.3 | 2026-08-10 | Bumped `actions/checkout` (v4→v5), `actions/setup-dotnet` (v4→v5), `actions/upload-artifact` (v4→v6), `github/codeql-action` (v3→v4), `actions/dependency-review-action` (v4→v5), and `azure/login` (v2→v3) across all workflows to their first majors shipping a Node.js 24 runtime, clearing GitHub's Node 20 deprecation warning on those steps. `azure/arm-deploy` has had no release since v2.0.0 (2024) and remains on Node 20 — GitHub's runner silently forces it onto Node 24 already, so this is cosmetic, not a functional issue; a fix would require migrating to the replacement `azure/bicep-deploy` action, out of scope here. |
 | 1.4 | 2026-08-10 | Security hardening pass: rewrote NFR-SEC-5 — the Web App is now gated behind Microsoft Entra ID sign-in via Azure App Service Authentication ("Easy Auth" v2), closing what had been the top accepted gap (no authentication layer existed at all). Added NFR-SEC-7–9: a strict per-request-nonce Content-Security-Policy and hardening headers (`SecurityHeadersMiddleware`), explicit XXE/DTD-processing prohibition in the DMARC XML parser, and a 50 MB decompression-bomb guard on zip/gzip attachment extraction. Also consolidated duplicated logic found in a dedicated review pass (`DmarcAlignment.IsAlignedPass`, `DbContext.GetOrCreateSingletonAsync`) and reworked `docs/deployment.md` with a Mermaid deployment-flow diagram. Test count 62 → 65. |
 | 1.5 | 2026-08-11 | Regenerated `docs/images/domain-detail.png` — the prior screenshot's sample data never triggered the "record changed"/"selector stale" badges the README describes next to it, even though the feature was (and still is) implemented; the new seed data exercises both. Reviewed the architecture against the Microsoft Cloud Security Benchmark (§5.2.1, new): added NFR-SEC-10–13 (resource tagging, diagnostic logging to the existing Log Analytics workspace for the Web App/Key Vault/SQL, zone-redundant SQL backups, and a gitleaks-based secret-scanning CI check) and documented — without applying — the larger-tradeoff controls (private endpoints, customer-managed keys, Defender for Cloud plans, Conditional Access) as deliberate deferrals with rationale. |
+| 1.6 | 2026-08-11 | Added `scorecard.yml` (OpenSSF Scorecard, weekly + on push to `main`) and a README badge — clarified (§5.2.2, new) that the low Token-Permissions/CII-Best-Practices/Fuzzing/Packaging/Signed-Releases scores seen in a prior PR's dependency-review comment were for the `actions/checkout` dependency, not this repository. Documented why Fuzzing, Packaging, and Signed-Releases are expected to score low here by design (no Scorecard-recognized fuzzing integration fits C#/.NET; the project deploys continuously rather than publishing versioned packages/releases) after confirming with the user that neither container packaging nor a formal release process is wanted right now. |
