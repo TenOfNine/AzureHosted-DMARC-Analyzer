@@ -43,11 +43,20 @@ var webAppName = take('${namePrefix}-web-${uniqueSuffix}', 60)
 var appServicePlanName = '${namePrefix}-plan-${environmentName}'
 var sqlDatabaseName = 'DmarcAnalyzer'
 
+// Applied to every resource for asset inventory/governance (MCSB GS-1) — lets a deploying
+// organization find/cost-report/scope-policy this instance's resources as a unit.
+var commonTags = {
+  application: 'dmarc-analyzer'
+  environment: environmentName
+  managedBy: 'bicep'
+}
+
 module monitoring 'modules/monitoring.bicep' = {
   name: 'monitoring'
   params: {
     location: location
     namePrefix: namePrefix
+    tags: commonTags
   }
 }
 
@@ -56,6 +65,8 @@ module keyVault 'modules/keyVault.bicep' = {
   params: {
     location: location
     keyVaultName: keyVaultName
+    tags: commonTags
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
   }
 }
 
@@ -68,6 +79,8 @@ module sqlServer 'modules/sqlServer.bicep' = {
     sqlAdminAadObjectId: sqlAdminAadObjectId
     sqlAdminAadLogin: sqlAdminAadLogin
     sqlAdminPrincipalType: sqlAdminPrincipalType
+    tags: commonTags
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
   }
 }
 
@@ -77,6 +90,7 @@ module appServicePlan 'modules/appServicePlan.bicep' = {
     location: location
     appServicePlanName: appServicePlanName
     skuName: appServicePlanSku
+    tags: commonTags
   }
 }
 
@@ -94,6 +108,8 @@ module webApp 'modules/webApp.bicep' = {
     authAadClientId: authAadClientId
     authAadTenantId: authAadTenantId
     authAadClientSecret: authAadClientSecret
+    tags: commonTags
+    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
   }
 }
 

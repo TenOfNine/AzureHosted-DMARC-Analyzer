@@ -4,9 +4,13 @@ param location string
 @description('Short prefix for resource names')
 param namePrefix string
 
+@description('Resource tags applied for asset inventory/governance (MCSB GS-1).')
+param tags object = {}
+
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: take('${namePrefix}-law', 63)
   location: location
+  tags: tags
   properties: {
     sku: {
       name: 'PerGB2018'
@@ -18,6 +22,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: take('${namePrefix}-appi', 260)
   location: location
+  tags: tags
   kind: 'web'
   properties: {
     Application_Type: 'web'

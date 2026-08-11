@@ -23,6 +23,12 @@ param authAadTenantId string = subscription().tenantId
 @description('Client secret for the sign-in App Registration — a different secret value than the Graph app\'s own (that one is entered later, in-app, via the setup wizard). Passed at deploy time only (GitHub Actions secret), never committed to source control. Required when enableEntraIdAuth is true.')
 param authAadClientSecret string = ''
 
+@description('Resource tags applied for asset inventory/governance (MCSB GS-1).')
+param tags object = {}
+
+@description('Log Analytics workspace resource ID to send App Service HTTP/console/platform logs to (MCSB LT-1/LT-3).')
+param logAnalyticsWorkspaceId string = ''
+
 var baseAppSettings = [
   {
     name: 'ApplicationInsights__ConnectionString'
@@ -61,6 +67,7 @@ var authAppSettings = enableEntraIdAuth ? [
 resource webApp 'Microsoft.Web/sites@2023-12-01' = {
   name: webAppName
   location: location
+  tags: tags
   kind: 'app,linux'
   identity: {
     type: 'SystemAssigned'
@@ -118,6 +125,42 @@ resource authSettings 'Microsoft.Web/sites/config@2023-12-01' = if (enableEntraI
         enabled: true
       }
     }
+  }
+}
+
+resource diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceId)) {
+  name: 'send-to-log-analytics'
+  scope: webApp
+  properties: {
+    workspaceId: logAnalyticsWorkspaceId
+    logs: [
+      {
+        category: 'AppServiceHTTPLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServiceConsoleLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServiceAppLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServiceAuditLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServicePlatformLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
   }
 }
 
