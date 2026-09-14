@@ -49,3 +49,15 @@ jobs:
           name: test-results
           path: ./test-results
           retention-days: 14
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Build-only (no push) — this just catches a broken Dockerfile/docker-compose setup before
+      # it reaches main, the same way build-test catches a broken csproj. The Docker Compose
+      # deployment path (see docs/deployment.md) has no CD pipeline of its own: it's meant to be
+      # run by the self-hoster directly, not pushed to a registry by us.
+      - name: Build image
+        run: docker build .

@@ -1,11 +1,48 @@
 # Deploying a new instance
 
-This deployment template is generic — the same repository can be deployed once per
-organization/customer into a fresh Azure resource group, with all tenant-specific configuration
-(Entra ID app registration, monitored domains, shared mailboxes, retention) captured afterward
-through the in-app setup wizard rather than baked into the infrastructure template.
+There are two, equally supported ways to run DMARC Analyzer:
 
-The whole journey, end to end:
+- **Docker Compose** (this page, next section) — fully self-contained, no Azure account required.
+  Secrets are encrypted and stored in the app's own database instead of Key Vault, SQL auth
+  replaces Managed Identity, and sign-in is generic OpenID Connect against any provider you already
+  run (Keycloak, Authentik, Auth0, or still Entra ID if you prefer).
+- **Azure App Service** (the rest of this page) — the same repository deployed once per
+  organization/customer into a fresh Azure resource group, with all tenant-specific configuration
+  (Entra ID app registration, monitored domains, shared mailboxes, retention) captured afterward
+  through the in-app setup wizard rather than baked into the infrastructure template. Uses Key
+  Vault, SQL Managed Identity auth, and Easy Auth sign-in — all passwordless.
+
+Both paths run the exact same application code; only how secrets, the database connection, and
+sign-in are wired up differs, all through configuration (see `Program.cs`).
+
+## Docker Compose (self-hosted, no Azure required)
+
+```bash
+cp .env.example .env
+# edit .env: set SQL_SA_PASSWORD, and OIDC_AUTHORITY/OIDC_CLIENT_ID/OIDC_CLIENT_SECRET
+# against whatever OpenID Connect provider you run (Keycloak, Authentik, Auth0, Entra ID, ...)
+docker compose up --build
+```
+
+This starts two containers: `sql` (SQL Server, with a named volume so data survives restarts) and
+`web` (the app, built from the repo's `Dockerfile`). On first start, `web` waits for `sql`'s
+healthcheck, then applies EF Core migrations automatically (`Database:AutoMigrate=true`, set in
+`docker-compose.yml`) — there's no separate migration step to run by hand. Data Protection keys
+(used both for the sign-in cookie and to encrypt secrets in the database) are persisted to a named
+volume too, so they — and anything encrypted with them — survive container recreation.
+
+Once it's up, browse to `http://localhost:8080`. If you left `OIDC_*` empty, you'll land directly
+on the setup wizard (fine for a quick local trial, **not** for anything reachable by anyone else);
+otherwise you're redirected to your IdP first. Walk through the setup wizard exactly as described
+in [step 7](#7-complete-the-setup-wizard) below — it's identical regardless of which deployment path
+you used.
+
+To stop: `docker compose down` (add `-v` to also delete the SQL and Data Protection volumes —
+this deletes all app data, including the encrypted Graph client secret).
+
+---
+
+The whole Azure journey, end to end:
 
 ```mermaid
 flowchart TD
@@ -174,13 +211,16 @@ the `Ingestion:PollIntervalMinutes` app setting).
 
 ## Local development
 
-You'll need a reachable SQL Server (e.g. a local SQL Server container, or `(localdb)` on
-Windows) and, to complete the Graph Connection step of the setup wizard locally, a real Azure Key
-Vault (`KeyVault:Uri` in `appsettings.Development.json` or user-secrets) that your local Azure
-identity (`az login`) has `Key Vault Secrets Officer` on — the app has no local-secret-storage
-fallback by design, since the client secret must never be stored anywhere but Key Vault. Easy Auth
-is an Azure App Service platform feature, not something `dotnet run` can reproduce locally — the
-app is unauthenticated when run this way, which is expected and fine for local development only.
+The easiest way to run the app locally is the [Docker Compose path](#docker-compose-self-hosted-no-azure-required)
+above — it needs no Azure account and no manual database setup. Leave `OIDC_*` empty in `.env` for
+a quick local run without sign-in.
+
+To run against `dotnet run` directly instead (e.g. for debugging in an IDE), you'll need a reachable
+SQL Server (a local SQL Server container, or `(localdb)` on Windows) and a connection string in
+`appsettings.Development.json` or user-secrets. By default the app uses `DatabaseSecretStore`
+(`SecretStore:Provider` unset or `Database`), so no Key Vault is required — set `KeyVault:Uri`
+(and `SecretStore:Provider=KeyVault`) only if you specifically want to test against a real Key
+Vault. Leave `Authentication:Oidc:Authority` empty to run unauthenticated, same as the Docker path.
 
 ```bash
 dotnet ef database update --project src/DmarcAnalyzer.Infrastructure --startup-project src/DmarcAnalyzer.Infrastructure

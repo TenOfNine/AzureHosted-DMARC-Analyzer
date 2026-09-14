@@ -5,13 +5,15 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/TenOfNine/AzureHosted-DMARC-Analyzer/badge)](https://scorecard.dev/viewer/?uri=github.com/TenOfNine/AzureHosted-DMARC-Analyzer)
 ![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
 ![.NET](https://img.shields.io/badge/.NET-8-512BD4)
-![Tests](https://img.shields.io/badge/tests-65%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-69%20passing-brightgreen)
 
-A self-hosted DMARC report analyzer, deployed as an Azure App Service. It ingests RUA/RUF reports
-from Exchange Online shared mailboxes via Microsoft Graph, and goes beyond just showing what a
-report claims: it independently re-checks each sending domain's **current** SPF record and DKIM
-selectors against every reported source IP, to catch drift between what a report says and what's
-actually authorized today.
+A self-hosted DMARC report analyzer, deployable either as an Azure App Service or standalone via
+Docker Compose (`docker compose up`, no Azure account required — see
+[`docs/deployment.md`](docs/deployment.md)). It ingests RUA/RUF reports from Exchange Online
+shared mailboxes via Microsoft Graph, and goes beyond just showing what a report claims: it
+independently re-checks each sending domain's **current** SPF record and DKIM selectors against
+every reported source IP, to catch drift between what a report says and what's actually authorized
+today.
 
 The same codebase is redeployable per organization — Entra ID app registration, monitored
 domains, shared mailboxes, and retention are all configured through an in-app setup wizard, not
@@ -24,16 +26,23 @@ src/
   DmarcAnalyzer.Core            Pure domain logic: RFC 7489 XML parsing, RFC 7208 SPF evaluation,
                                  DKIM selector checking, sender-legitimacy scoring.
                                  No Azure/EF/Graph dependency — fully unit-testable offline.
-  DmarcAnalyzer.Infrastructure  EF Core (Azure SQL), Microsoft Graph client, Key Vault secret
-                                 store, DNS resolution, background ingestion + retention jobs.
-  DmarcAnalyzer.Web             ASP.NET Core Razor Pages: setup wizard, dashboard, settings.
+  DmarcAnalyzer.Infrastructure  EF Core (SQL Server), Microsoft Graph client, pluggable secret
+                                 store (Key Vault or database-encrypted), DNS resolution,
+                                 background ingestion + retention jobs.
+  DmarcAnalyzer.Web             ASP.NET Core Razor Pages: setup wizard, dashboard, settings;
+                                 generic OpenID Connect sign-in (self-hosted) or Azure Easy Auth.
 tests/DmarcAnalyzer.Tests       xUnit tests against fakes (no network access needed).
 tools/GrantSqlAccess            Small deploy-time utility granting the Web App's managed identity
-                                 access to Azure SQL (Bicep can't create database users).
+                                 access to Azure SQL (Bicep can't create database users) — Azure
+                                 deployments only, not used by Docker Compose.
 infra/                          Bicep: App Service, Azure SQL (AAD-only auth), Key Vault, App
                                  Insights — parameterized generically for reuse per deployment.
-.github/workflows/               CI (build/test/format) and CD (OIDC → Bicep → migrate → deploy).
-docs/                           Deployment guide and the one manual Exchange Online step.
+Dockerfile, docker-compose.yml  Standalone deployment: SQL Server container + the app, no Azure
+                                 service required.
+.github/workflows/               CI (build/test/format, docker build) and CD (OIDC → Bicep →
+                                 migrate → deploy) for the Azure path.
+docs/                           Deployment guide (both paths) and the one manual Exchange Online
+                                 step.
 ```
 
 See [`docs/technical-specification.md`](docs/technical-specification.md) for the full functional
@@ -134,10 +143,13 @@ automatically until all of it is complete.
 
 ## Security
 
-- **Sign-in required**: Azure App Service Authentication ("Easy Auth") gates every request behind
-  Microsoft Entra ID sign-in at the platform level, in front of the setup wizard and dashboard
-  alike — enabled by default (`enableEntraIdAuth` in `infra/main.bicep`); see
+- **Sign-in required**: on Azure, App Service Authentication ("Easy Auth") gates every request
+  behind Microsoft Entra ID sign-in at the platform level, in front of the setup wizard and
+  dashboard alike — enabled by default (`enableEntraIdAuth` in `infra/main.bicep`); see
   [`docs/deployment.md`](docs/deployment.md#3-set-up-sign-in-authentication-easy-auth) for setup.
+  The Docker Compose deployment instead uses in-app generic OpenID Connect against whatever IdP
+  you configure (`Authentication:Oidc:*`) — functionally equivalent, just not an Azure platform
+  feature; see [`docs/deployment.md`](docs/deployment.md#docker-compose-self-hosted-no-azure-required).
 - **Hardened response headers**: a restrictive Content-Security-Policy (nonce-based `script-src`,
   no external origins — everything under `wwwroot/lib` is vendored, nothing loads from a CDN),
   `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and `Permissions-Policy` on every
@@ -146,9 +158,13 @@ automatically until all of it is complete.
   (XXE / entity-expansion), and zip/gzip attachment extraction is capped at 50 MB of actual
   decompressed bytes — the shared mailbox accepts attachments from arbitrary internet senders, so
   both are real, not theoretical, attack surface.
-- **No password-based credentials anywhere**: Graph access is app-only OAuth, SQL access is Azure
+- **No password-based credentials on Azure**: Graph access is app-only OAuth, SQL access is Azure
   AD-only (managed identity), Key Vault access is managed identity via RBAC, and GitHub Actions
-  authenticates to Azure via OIDC federated credentials.
+  authenticates to Azure via OIDC federated credentials. The Docker Compose path is necessarily
+  password-based instead (there's no managed identity outside Azure): a SQL Server "sa" password
+  and an OIDC client secret, both operator-supplied via `.env` and never committed — the Graph
+  client secret itself is still never stored in plaintext, just encrypted at rest in the app's own
+  database (`DatabaseSecretStore`, via ASP.NET Core Data Protection) instead of Key Vault.
 - **Auditable by default**: every Bicep-deployed resource is tagged, and Web App/Key Vault/SQL
   audit logs are routed to the deployment's Log Analytics workspace automatically; a
   [`secret-scan.yml`](.github/workflows/secret-scan.yml) workflow scans every push/PR with
@@ -173,22 +189,23 @@ automatically until all of it is complete.
 ## Testing
 
 ```
-Passed!  - Failed: 0, Passed: 65, Skipped: 0, Total: 65
+Passed!  - Failed: 0, Passed: 69, Skipped: 0, Total: 69
 ```
 
-65 xUnit tests cover the RFC 7489 XML parser (including DOCTYPE/XXE rejection), the RFC 7208 SPF
+69 xUnit tests cover the RFC 7489 XML parser (including DOCTYPE/XXE rejection), the RFC 7208 SPF
 evaluator (CIDR boundaries, recursive `include`, `redirect`, the 10-lookup limit, all qualifiers),
 the DKIM selector checker, the sender-legitimacy scoring rules, attachment extraction (including
-the decompression-bomb size guard), and the ingestion pipeline (dedupe, per-message failure
-isolation, sender-reputation aggregation) — all against hand-written fakes for Graph/DNS, so the
-suite needs no network access and runs the same locally as in CI.
+the decompression-bomb size guard), the ingestion pipeline (dedupe, per-message failure isolation,
+sender-reputation aggregation), and the database-backed secret store — all against hand-written
+fakes for Graph/DNS/Data Protection, so the suite needs no network access and runs the same locally
+as in CI.
 
-Every pull request and push to `main` runs three workflows, all required to be green before
+Every pull request and push to `main` runs four workflows, all required to be green before
 merging:
 
 | Workflow | What it checks |
 | --- | --- |
-| [`ci.yml`](.github/workflows/ci.yml) | `dotnet build`, `dotnet format --verify-no-changes` (lint), `dotnet test` with code coverage collection |
+| [`ci.yml`](.github/workflows/ci.yml) | `dotnet build`, `dotnet format --verify-no-changes` (lint), `dotnet test` with code coverage collection, and a `docker build` of the Compose deployment path |
 | [`codeql.yml`](.github/workflows/codeql.yml) | [CodeQL](https://codeql.github.com/) static analysis for C#, plus a weekly scheduled scan |
 | [`dependency-review.yml`](.github/workflows/dependency-review.yml) | Flags newly introduced dependencies with known vulnerabilities or high-severity advisories |
 
@@ -199,8 +216,11 @@ dotnet build
 dotnet test
 ```
 
-Running the app locally requires a reachable SQL Server and a real Azure Key Vault your local
-identity has access to — see [`docs/deployment.md`](docs/deployment.md#local-development).
+For running the app itself locally, `docker compose up` (see
+[`docs/deployment.md`](docs/deployment.md#docker-compose-self-hosted-no-azure-required)) needs
+nothing beyond Docker — no Azure account, no manual database setup. Running via `dotnet run`
+directly instead still needs a reachable SQL Server; see
+[`docs/deployment.md`](docs/deployment.md#local-development) for both.
 
 ## License
 

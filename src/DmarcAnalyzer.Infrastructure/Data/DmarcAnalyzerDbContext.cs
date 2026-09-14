@@ -19,6 +19,7 @@ public class DmarcAnalyzerDbContext(DbContextOptions<DmarcAnalyzerDbContext> opt
     public DbSet<DkimSelectorCheck> DkimSelectorChecks => Set<DkimSelectorCheck>();
     public DbSet<VerifiedSenderOverride> VerifiedSenderOverrides => Set<VerifiedSenderOverride>();
     public DbSet<SenderReputation> SenderReputations => Set<SenderReputation>();
+    public DbSet<EncryptedSecret> Secrets => Set<EncryptedSecret>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

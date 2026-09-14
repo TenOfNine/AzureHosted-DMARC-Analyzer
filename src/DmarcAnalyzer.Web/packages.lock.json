@@ -15,6 +15,15 @@
           "OpenTelemetry.Instrumentation.SqlClient": "1.15.2"
         }
       },
+      "Microsoft.AspNetCore.Authentication.OpenIdConnect": {
+        "type": "Direct",
+        "requested": "[8.0.11, )",
+        "resolved": "8.0.11",
+        "contentHash": "jbpYiymDIE2hJBMOOX0fi701bAzm+QlOMAfByC1A/HEiMZMS7iPJ8bfOQ3WQvXacu/dwbMJsBBHqaliSmDsFwQ==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Protocols.OpenIdConnect": "7.1.2"
+        }
+      },
       "Azure.Core": {
         "type": "Transitive",
         "resolved": "1.54.0",
@@ -70,6 +79,11 @@
         "dependencies": {
           "Azure.Monitor.OpenTelemetry.Exporter": "1.8.0"
         }
+      },
+      "Microsoft.AspNetCore.DataProtection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "9.0.18",
+        "contentHash": "EzyBCFr1AZVmCZpqygqZFXE3UliLiXiTyJUuXZnC4cl3FRJwMzKkOpPlX5HvqoAdIwxuw0WLzJbK7GZIuGjcLQ=="
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
@@ -707,6 +721,7 @@
           "Azure.Security.KeyVault.Secrets": "[4.11.0, )",
           "DmarcAnalyzer.Core": "[1.0.0, )",
           "DnsClient": "[1.8.0, )",
+          "Microsoft.AspNetCore.DataProtection.Abstractions": "[9.0.18, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[9.0.18, )",
           "Microsoft.Graph": "[6.5.0, )"
         }
