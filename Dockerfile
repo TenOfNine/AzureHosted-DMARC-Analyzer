@@ -19,6 +19,10 @@ RUN dotnet publish src/DmarcAnalyzer.Web/DmarcAnalyzer.Web.csproj -c Release --n
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 RUN useradd --uid 1000 --create-home dmarcanalyzer
+# Pre-create the Data Protection key volume's mount point owned by the app user — Docker seeds a
+# freshly created named volume from the image directory it's mounted over, ownership included, so
+# this is what makes /data/keys writable by a non-root container instead of staying root-owned.
+RUN mkdir -p /data/keys && chown dmarcanalyzer:dmarcanalyzer /data/keys
 USER dmarcanalyzer
 COPY --from=build --chown=dmarcanalyzer /app/publish .
 
