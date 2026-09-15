@@ -26,6 +26,14 @@
                             <a class="nav-link" asp-page="/Settings/Index">Settings</a>
                         </li>
                     </ul>
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <ul class="navbar-nav">
+                            <li class="nav-item">
+                                <a class="nav-link" href="/account/signout">Sign out</a>
+                            </li>
+                        </ul>
+                    }
                 </div>
             </div>
         </nav>

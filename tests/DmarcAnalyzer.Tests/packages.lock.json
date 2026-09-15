@@ -84,6 +84,11 @@
         "resolved": "1.8.0",
         "contentHash": "RRwtaCXkXWsx0mmsReGDqCbRLtItfUbkRJlet1FpdciVhyMGKcPd57T1+8Jki9ojHlq9fntVhXQroOOgRak8DQ=="
       },
+      "Microsoft.AspNetCore.DataProtection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "9.0.18",
+        "contentHash": "EzyBCFr1AZVmCZpqygqZFXE3UliLiXiTyJUuXZnC4cl3FRJwMzKkOpPlX5HvqoAdIwxuw0WLzJbK7GZIuGjcLQ=="
+      },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
         "resolved": "10.0.3",
@@ -657,6 +662,7 @@
           "Azure.Security.KeyVault.Secrets": "[4.11.1, )",
           "DmarcAnalyzer.Core": "[1.0.0, )",
           "DnsClient": "[1.8.0, )",
+          "Microsoft.AspNetCore.DataProtection.Abstractions": "[9.0.18, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[9.0.19, )",
           "Microsoft.Graph": "[6.6.0, )"
         }

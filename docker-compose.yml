@@ -1,0 +1,42 @@
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env}
+    volumes:
+      - sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      sql:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DmarcAnalyzer: "Server=sql;Database=DmarcAnalyzer;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;"
+      SecretStore__Provider: "Database"
+      DataProtection__KeyPath: "/data/keys"
+      Database__AutoMigrate: "true"
+      Authentication__Oidc__Authority: ${OIDC_AUTHORITY:-}
+      Authentication__Oidc__ClientId: ${OIDC_CLIENT_ID:-}
+      Authentication__Oidc__ClientSecret: ${OIDC_CLIENT_SECRET:-}
+      Ingestion__PollIntervalMinutes: "15"
+      Retention__PurgeIntervalHours: "24"
+    ports:
+      - "8080:8080"
+    volumes:
+      - dp-keys:/data/keys
+    restart: unless-stopped
+
+volumes:
+  sql-data:
+  dp-keys:

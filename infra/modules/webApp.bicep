@@ -39,6 +39,12 @@ var baseAppSettings = [
     value: keyVaultUri
   }
   {
+    // The app defaults to a self-contained, database-backed secret store (see
+    // DatabaseSecretStore) for non-Azure deployments — Azure explicitly opts back into Key Vault.
+    name: 'SecretStore__Provider'
+    value: 'KeyVault'
+  }
+  {
     // Azure AD (managed identity) auth — no password. The Web App's own system-assigned
     // identity must be granted a database user + role via infra/post-deploy-sql-grant.sql
     // after this template deploys (see docs/deployment.md).

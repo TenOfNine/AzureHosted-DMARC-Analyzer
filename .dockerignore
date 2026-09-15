@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+.git/
+.github/
+tests/
+tools/
+infra/
+docs/
+*.md
+.env
+.env.*
+!.env.example

@@ -4,6 +4,7 @@ using DmarcAnalyzer.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DmarcAnalyzer.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(DmarcAnalyzerDbContext))]
-    partial class DmarcAnalyzerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914205351_AddEncryptedSecrets")]
+    partial class AddEncryptedSecrets
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
