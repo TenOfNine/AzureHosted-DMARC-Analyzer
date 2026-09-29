@@ -17,11 +17,11 @@
       },
       "Microsoft.AspNetCore.Authentication.OpenIdConnect": {
         "type": "Direct",
-        "requested": "[8.0.11, )",
-        "resolved": "8.0.11",
-        "contentHash": "jbpYiymDIE2hJBMOOX0fi701bAzm+QlOMAfByC1A/HEiMZMS7iPJ8bfOQ3WQvXacu/dwbMJsBBHqaliSmDsFwQ==",
+        "requested": "[8.0.31, )",
+        "resolved": "8.0.31",
+        "contentHash": "pN5N/HBKwo4iKTxL+2drf9l1oMYImN/PHimwWP6+l6QDtXG6ot0dwQ3MK9YINNKafmLQOUkbnvG0SWNqbKEiZw==",
         "dependencies": {
-          "Microsoft.IdentityModel.Protocols.OpenIdConnect": "7.1.2"
+          "Microsoft.IdentityModel.Protocols.OpenIdConnect": "7.7.3"
         }
       },
       "Azure.Core": {
